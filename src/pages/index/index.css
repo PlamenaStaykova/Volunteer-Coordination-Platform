@@ -1,3 +1,72 @@
 .page-index .page-inner {
   padding: 2rem 0;
 }
+
+.home-hero {
+  margin-bottom: 2rem;
+}
+
+.home-eyebrow {
+  margin: 0 0 0.5rem;
+  color: #3d5a80;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.home-hero h1 {
+  margin: 0;
+  max-width: 720px;
+  line-height: 1.2;
+}
+
+.home-subtitle {
+  max-width: 720px;
+  margin: 0.9rem 0 0;
+  color: #30445c;
+  font-size: 1.05rem;
+}
+
+.home-auth-note {
+  margin: 1rem 0 0;
+  font-size: 1rem;
+}
+
+.btn-secondary {
+  background: #f0f5ff;
+}
+
+.btn-secondary:hover {
+  background: #e3ecff;
+}
+
+.user-types {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.user-type-card {
+  padding: 1rem;
+  background: #fff;
+  border: 1px solid #dce3eb;
+  border-radius: 10px;
+}
+
+.user-type-card h2 {
+  margin: 0 0 0.65rem;
+  font-size: 1.15rem;
+}
+
+.user-type-card p {
+  margin: 0;
+  color: #30445c;
+  line-height: 1.45;
+}
+
+@media (max-width: 700px) {
+  .user-types {
+    grid-template-columns: 1fr;
+  }
+}
