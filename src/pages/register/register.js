@@ -96,9 +96,16 @@ export async function renderRegisterPage(mountNode) {
         return;
       }
 
+      const requiresEmailConfirmation = !data?.session;
+
       // Success - show confirmation message and redirect
       authError.style.color = "green";
-      authError.textContent = "Account created successfully! Redirecting to login...";
+      if (requiresEmailConfirmation) {
+        authError.textContent =
+          "Account created successfully. Please confirm your email first, then log in.";
+      } else {
+        authError.textContent = "Account created successfully! Redirecting to login...";
+      }
 
       setTimeout(() => {
         window.location.href = role ? `/login?role=${role}` : "/login";

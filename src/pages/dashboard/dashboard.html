@@ -1,7 +1,35 @@
 <main class="page page-dashboard">
   <div class="container page-inner">
-    <h1>Dashboard</h1>
-    <p>Dashboard page scaffolded and mapped to <code>/dashboard</code>.</p>
+    <section class="dashboard-hero">
+      <h1>Campaign Dashboard</h1>
+      <p>Browse all available campaigns across the platform.</p>
+    </section>
+
+    <section class="dashboard-stats" aria-label="Campaign statistics">
+      <article class="stat-card">
+        <h2>Active Campaigns</h2>
+        <p id="activeCampaignsCount" class="stat-value">-</p>
+      </article>
+      <article class="stat-card">
+        <h2>All Campaigns</h2>
+        <p id="allCampaignsCount" class="stat-value">-</p>
+      </article>
+    </section>
+
+    <section class="dashboard-filters" aria-label="Campaign status filters">
+      <div class="filter-tabs">
+        <button class="filter-tab is-active" data-filter="total" type="button">Total</button>
+        <button class="filter-tab" data-filter="open" type="button">Open</button>
+        <button class="filter-tab" data-filter="done" type="button">Done</button>
+      </div>
+    </section>
+
+    <section class="campaign-list-section">
+      <ul id="campaignList" class="campaign-list"></ul>
+      <p id="campaignEmptyState" class="campaign-empty-state" hidden>No campaigns found for this filter.</p>
+      <p id="dashboardError" class="dashboard-error" hidden>Unable to load campaigns right now.</p>
+    </section>
+
     <div class="page-actions">
       <a class="btn" href="/">Go to Home</a>
     </div>

@@ -1,0 +1,54 @@
+.page-campaign .page-inner {
+  padding: 2rem 0;
+}
+
+.campaign-detail,
+.campaign-missing {
+  background: #fff;
+  border: 1px solid #dce3eb;
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.campaign-back-link {
+  margin: 0 0 0.6rem;
+}
+
+.campaign-back-link a {
+  color: #1c3b63;
+  text-decoration: underline;
+}
+
+.campaign-detail h1,
+.campaign-missing h1 {
+  margin: 0;
+}
+
+.campaign-detail-meta {
+  margin: 0.5rem 0 0;
+  color: #30445c;
+}
+
+.campaign-description {
+  margin: 1rem 0 0;
+  line-height: 1.5;
+}
+
+.campaign-detail-metrics {
+  margin-top: 0.9rem;
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.campaign-detail-metrics p {
+  margin: 0;
+}
+
+.campaign-missing p {
+  margin-top: 0.7rem;
+}
+
+.campaign-missing .btn {
+  margin-top: 0.9rem;
+}

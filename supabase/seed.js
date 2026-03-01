@@ -70,6 +70,10 @@ async function getOrCreateUser(userSpec) {
     email: userSpec.email,
     password: userSpec.password,
     email_confirm: true,
+    user_metadata: {
+      user_type: userSpec.type,
+      display_name: userSpec.display_name,
+    },
   });
 
   if (!error) {
@@ -84,6 +88,18 @@ async function getOrCreateUser(userSpec) {
   if (isDuplicateUserError(error)) {
     const existingUser = await findUserByEmail(userSpec.email);
     if (existingUser?.id) {
+      const { error: updateError } = await supabase.auth.admin.updateUserById(existingUser.id, {
+        user_metadata: {
+          ...(existingUser.user_metadata || {}),
+          user_type: userSpec.type,
+          display_name: userSpec.display_name,
+        },
+      });
+
+      if (updateError) {
+        console.error("failed to update user metadata", userSpec.email, updateError);
+      }
+
       return existingUser.id;
     }
   }
@@ -119,6 +135,7 @@ async function seed() {
         {
           id: u.id,
           display_name: u.display_name,
+          user_type: u.type,
         },
         { onConflict: "id" },
       );

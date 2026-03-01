@@ -2,7 +2,7 @@ import "./login.css";
 import pageHtml from "./login.html?raw";
 import { renderHeader } from "../../components/header/header.js";
 import { renderFooter } from "../../components/footer/footer.js";
-import { signIn, getCurrentUser } from "../../lib/supabase.js";
+import { signIn, getCurrentUser, getUserType, signOut } from "../../lib/supabase.js";
 
 function getRoleFromQuery() {
   const role = new URLSearchParams(window.location.search).get("role");
@@ -81,15 +81,35 @@ export async function renderLoginPage(mountNode) {
       const { data, error } = await signIn(email, password);
 
       if (error) {
-        authError.textContent =
-          error.message ||
-          `Failed to log in${role ? ` as ${role}` : ""}. Please check your credentials.`;
+        const rawMessage = (error.message || "").toLowerCase();
+        const isInvalidCredentials = rawMessage.includes("invalid login credentials");
+
+        if (isInvalidCredentials) {
+          authError.textContent =
+            "Invalid email/password, or your email is not confirmed yet. Please check your inbox for a confirmation email or register again.";
+        } else {
+          authError.textContent =
+            error.message ||
+            `Failed to log in${role ? ` as ${role}` : ""}. Please check your credentials.`;
+        }
+
         loginButton.disabled = false;
         loginButton.textContent = "Log In";
         return;
       }
 
       if (data.user) {
+        if (role) {
+          const resolvedUserType = await getUserType(data.user);
+          if (resolvedUserType && resolvedUserType !== role) {
+            await signOut();
+            authError.textContent = `This account is ${resolvedUserType}. Please use the ${resolvedUserType} log in section.`;
+            loginButton.disabled = false;
+            loginButton.textContent = "Log In";
+            return;
+          }
+        }
+
         // Redirect to dashboard on successful login
         window.location.href = "/dashboard";
       }

@@ -105,3 +105,75 @@ export function onAuthStateChange(callback) {
   );
   return data.subscription;
 }
+
+export async function getCampaignDashboardData() {
+  if (!supabase) {
+    return { data: [], error: new Error(missingConfigMessage) };
+  }
+
+  const { data, error } = await supabase.rpc("get_campaign_dashboard");
+  return { data: data ?? [], error };
+}
+
+function normalizeUserType(value) {
+  if (!value || typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "organizer" || normalized === "volunteer") {
+    return normalized;
+  }
+
+  return null;
+}
+
+export async function getUserType(user = null) {
+  if (!supabase) {
+    return null;
+  }
+
+  const currentUser = user || (await getCurrentUser());
+  if (!currentUser) {
+    return null;
+  }
+
+  const metadataRole = normalizeUserType(
+    currentUser.user_metadata?.user_type || currentUser.app_metadata?.user_type
+  );
+  if (metadataRole) {
+    return metadataRole;
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("user_type, display_name")
+    .eq("id", currentUser.id)
+    .maybeSingle();
+
+  const profileRole = normalizeUserType(profile?.user_type);
+  if (!profileError && profileRole) {
+    return profileRole;
+  }
+
+  if (!profileError && profile?.display_name) {
+    const displayName = profile.display_name.toLowerCase();
+    if (displayName.includes("organizer")) {
+      return "organizer";
+    }
+    if (displayName.includes("volunteer")) {
+      return "volunteer";
+    }
+  }
+
+  const { count, error: eventsError } = await supabase
+    .from("events")
+    .select("id", { count: "exact", head: true })
+    .eq("created_by", currentUser.id);
+
+  if (!eventsError && (count ?? 0) > 0) {
+    return "organizer";
+  }
+
+  return "volunteer";
+}

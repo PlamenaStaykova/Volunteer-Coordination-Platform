@@ -1,3 +1,155 @@
 .page-dashboard .page-inner {
   padding: 2rem 0;
 }
+
+.dashboard-hero h1 {
+  margin: 0;
+}
+
+.dashboard-hero p {
+  margin: 0.6rem 0 0;
+  color: #30445c;
+}
+
+.dashboard-stats {
+  margin-top: 1.25rem;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.stat-card {
+  background: #fff;
+  border: 1px solid #dce3eb;
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.stat-card h2 {
+  margin: 0;
+  font-size: 1rem;
+  color: #30445c;
+}
+
+.stat-value {
+  margin: 0.35rem 0 0;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.dashboard-filters {
+  margin-top: 1rem;
+}
+
+.filter-tabs {
+  display: inline-flex;
+  border: 1px solid #dce3eb;
+  border-radius: 999px;
+  background: #fff;
+  padding: 0.2rem;
+}
+
+.filter-tab {
+  border: 0;
+  background: transparent;
+  border-radius: 999px;
+  padding: 0.45rem 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.filter-tab.is-active {
+  background: #e6efff;
+}
+
+.campaign-list-section {
+  margin-top: 1rem;
+}
+
+.campaign-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.campaign-card {
+  background: #fff;
+  border: 1px solid #dce3eb;
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.campaign-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.campaign-header h3 {
+  margin: 0;
+}
+
+.campaign-title-link {
+  color: #1c3b63;
+  text-decoration: underline;
+  text-decoration-color: #aac2e6;
+}
+
+.campaign-status {
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.campaign-status.is-open {
+  background: #e7f7ea;
+  color: #0b6a2b;
+}
+
+.campaign-status.is-done {
+  background: #f4f4f4;
+  color: #5f6670;
+}
+
+.campaign-org,
+.campaign-meta {
+  margin: 0.55rem 0 0;
+}
+
+.campaign-metrics {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.campaign-empty-state,
+.dashboard-error {
+  margin: 0;
+  padding: 0.9rem 1rem;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #dce3eb;
+}
+
+.dashboard-error {
+  margin-top: 0.8rem;
+  border-color: #f1c7c7;
+  background: #fff5f5;
+  color: #8a1c1c;
+}
+
+@media (max-width: 700px) {
+  .dashboard-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .campaign-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
