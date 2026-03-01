@@ -1,0 +1,29 @@
+.site-header {
+  background: #ffffff;
+  border-bottom: 1px solid #dce3eb;
+}
+
+.header-inner {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand {
+  font-weight: 700;
+}
+
+.nav-links {
+  display: flex;
+  gap: 1rem;
+}
+
+.nav-links a {
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+}
+
+.nav-links a.active {
+  background: #e6efff;
+}

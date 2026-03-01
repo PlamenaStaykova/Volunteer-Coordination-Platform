@@ -1,0 +1,10 @@
+.site-footer {
+  border-top: 1px solid #dce3eb;
+  background: #ffffff;
+}
+
+.footer-inner {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+}
