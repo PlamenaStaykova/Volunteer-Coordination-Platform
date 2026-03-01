@@ -28,58 +28,42 @@
   font-size: 1.05rem;
 }
 
-.home-auth-note {
-  margin: 1rem 0 0;
-  font-size: 1rem;
-}
-
-.btn-secondary {
-  background: #f0f5ff;
-}
-
-.btn-secondary:hover {
-  background: #e3ecff;
-}
-
-.user-types {
+.home-gallery {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
+  margin-bottom: 1.6rem;
 }
 
-.user-type-card {
-  padding: 1rem;
-  background: #fff;
-  border: 1px solid #dce3eb;
+.gallery-item {
+  min-height: 180px;
+}
+
+.gallery-item-wide {
+  grid-column: span 2;
+}
+
+.gallery-placeholder {
+  height: 100%;
+  border: 1px solid #cfdceb;
   border-radius: 10px;
+  background:
+    radial-gradient(circle at 15% 20%, #dceeff 0, #dceeff 18%, transparent 18%),
+    radial-gradient(circle at 85% 80%, #dff8e5 0, #dff8e5 22%, transparent 22%),
+    linear-gradient(145deg, #f8fbff 0%, #eef6ff 45%, #f6fff9 100%);
   display: flex;
-  flex-direction: column;
-  gap: 0.8rem;
+  align-items: flex-end;
+  padding: 0.8rem;
 }
 
-.user-type-card h2 {
-  margin: 0;
-  font-size: 1.15rem;
-}
-
-.user-type-card p {
-  margin: 0;
-  color: #30445c;
-  line-height: 1.45;
-}
-
-.user-type-actions {
-  margin-top: 0.25rem;
-}
-
-.user-type-card-organizer {
-  border-color: #b6d2ff;
-  background: #f8fbff;
-}
-
-.user-type-card-volunteer {
-  border-color: #bde3c4;
-  background: #f7fff9;
+.gallery-placeholder span {
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid #d7e3f2;
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #274466;
 }
 
 .public-campaigns {
@@ -175,8 +159,12 @@
 }
 
 @media (max-width: 700px) {
-  .user-types {
+  .home-gallery {
     grid-template-columns: 1fr;
+  }
+
+  .gallery-item-wide {
+    grid-column: auto;
   }
 
   .public-campaign-head {
