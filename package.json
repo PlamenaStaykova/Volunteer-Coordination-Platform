@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "vite": "^6.4.1"
+    "vite": "^6.4.1",
+    "@supabase/supabase-js": "^2.35.0",
+    "dotenv": "^16.0.3"
   }
 }

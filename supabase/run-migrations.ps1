@@ -1,7 +1,7 @@
 param(
   [string]$ProjectRef = "eijcwbrmxnvzynnnvtka",
   [string]$DbUrl,
-  [SecureString]$DbPassword,
+  [string]$DbPassword,
   [string]$AccessToken,
   [switch]$DryRun
 )
