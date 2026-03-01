@@ -3,6 +3,7 @@
     <section id="campaignDetail" class="campaign-detail" hidden>
       <p class="campaign-back-link"><a href="/dashboard">Back to Dashboard</a></p>
       <h1 id="campaignTitle"></h1>
+      <p id="campaignStatus" class="campaign-status-line"></p>
       <p id="campaignOrg" class="campaign-detail-meta"></p>
       <p id="campaignLocation" class="campaign-detail-meta"></p>
       <p id="campaignDates" class="campaign-detail-meta"></p>
@@ -11,6 +12,46 @@
         <p><strong>Max Volunteers:</strong> <span id="campaignMaxVolunteers"></span></p>
         <p><strong>Vacancies:</strong> <span id="campaignVacancies"></span></p>
       </div>
+
+      <div id="volunteerActions" class="campaign-actions" hidden>
+        <button id="joinCampaignBtn" class="btn" type="button">Join Campaign</button>
+        <button id="leaveCampaignBtn" class="btn btn-neutral" type="button">Leave Campaign</button>
+      </div>
+      <p id="campaignActionMessage" class="inline-message" hidden></p>
+    </section>
+
+    <section id="campaignAdminTools" class="campaign-admin-tools" hidden>
+      <h2>Organizer / Admin Tools</h2>
+
+      <article class="admin-card">
+        <h3>Edit Campaign</h3>
+        <div id="campaignInlineEditor" class="campaign-inline-editor"></div>
+      </article>
+
+      <article class="admin-card">
+        <h3>Campaign Status & Delete</h3>
+        <div class="campaign-actions">
+          <button id="toggleCampaignStatusBtn" class="btn" type="button">Mark Done</button>
+          <button id="deleteCampaignBtn" class="btn btn-danger" type="button">Delete Campaign</button>
+        </div>
+      </article>
+
+      <article class="admin-card">
+        <h3>Assign Volunteer</h3>
+        <form id="assignVolunteerForm" class="admin-form compact-admin-form">
+          <label>
+            Volunteer
+            <select id="assignVolunteerSelect" required></select>
+          </label>
+          <button class="btn btn-small" type="submit">Assign Volunteer</button>
+        </form>
+      </article>
+
+      <article class="admin-card">
+        <h3>Current Applications</h3>
+        <ul id="applicationsList" class="applications-list"></ul>
+        <p id="applicationsEmpty" class="campaign-empty-state" hidden>No active applications for this campaign.</p>
+      </article>
     </section>
 
     <section id="campaignMissing" class="campaign-missing" hidden>

@@ -5,6 +5,43 @@
       <p>Browse all available campaigns across the platform.</p>
     </section>
 
+    <section class="profile-panel" aria-label="Profile details">
+      <div class="profile-panel-header">
+        <h2>Your Profile</h2>
+        <p>Keep your contact details up to date for campaign coordination.</p>
+      </div>
+      <form id="profileForm" class="profile-form">
+        <label>
+          First Name
+          <input id="profileFirstName" type="text" required />
+        </label>
+        <label>
+          Last Name
+          <input id="profileLastName" type="text" required />
+        </label>
+        <label>
+          Email
+          <input id="profileEmail" type="email" required />
+        </label>
+        <label>
+          Phone
+          <input id="profilePhone" type="tel" />
+        </label>
+        <div id="organizerProfileFields" class="profile-form-row profile-organizer-fields" hidden>
+          <label>
+            Organization Name
+            <input id="profileOrganizationName" type="text" />
+          </label>
+          <label>
+            Campaign Manager
+            <input id="profileCampaignManager" type="text" />
+          </label>
+        </div>
+        <button class="btn profile-save-btn" type="submit">Save Profile</button>
+      </form>
+      <p id="profileMessage" class="inline-message" hidden></p>
+    </section>
+
     <section class="dashboard-stats" aria-label="Campaign statistics">
       <article class="stat-card">
         <h2>Active Campaigns</h2>
@@ -24,10 +61,85 @@
       </div>
     </section>
 
+    <section id="adminPanel" class="admin-panel" hidden>
+      <div class="admin-panel-header">
+        <h2>Admin / Organizer Tools</h2>
+        <p>Create, update, close, delete campaigns and manage volunteers.</p>
+      </div>
+
+      <div class="admin-grid">
+        <article class="admin-card">
+          <h3>Create Campaign</h3>
+          <form id="createCampaignForm" class="admin-form">
+            <label>
+              Title
+              <input id="createTitle" type="text" required />
+            </label>
+            <label>
+              Description
+              <textarea id="createDescription" rows="3" required></textarea>
+            </label>
+            <label>
+              Location
+              <input id="createLocation" type="text" required />
+            </label>
+            <label>
+              Start
+              <input id="createStartAt" type="date" required />
+            </label>
+            <label>
+              End
+              <input id="createEndAt" type="date" required />
+            </label>
+            <label>
+              Max Volunteers
+              <input id="createCapacity" type="number" min="1" value="10" required />
+            </label>
+            <button class="btn" type="submit">Create Campaign</button>
+          </form>
+          <p id="createCampaignMessage" class="inline-message" hidden></p>
+        </article>
+      </div>
+      <p id="adminActionMessage" class="inline-message" hidden></p>
+
+      <article class="admin-card admin-list-card">
+        <h3>My Campaigns</h3>
+        <ul id="organizerCampaignList" class="organizer-campaign-list"></ul>
+        <p id="organizerCampaignEmpty" class="campaign-empty-state" hidden>No campaigns created yet.</p>
+      </article>
+
+      <article class="admin-card admin-list-card">
+        <h3>Campaign Applications</h3>
+        <form id="assignVolunteerForm" class="admin-form compact-admin-form">
+          <label>
+            Campaign
+            <select id="assignCampaignSelect" required></select>
+          </label>
+          <label>
+            Volunteer
+            <select id="assignVolunteerSelect" required></select>
+          </label>
+          <button class="btn btn-small" type="submit">Assign Volunteer</button>
+        </form>
+        <p id="assignVolunteerMessage" class="inline-message" hidden></p>
+        <p id="applicationsHint" class="admin-hint">Select "View Volunteers" from a campaign above.</p>
+        <ul id="applicationsList" class="applications-list"></ul>
+        <p id="applicationsEmpty" class="campaign-empty-state" hidden>No active applications for this campaign.</p>
+      </article>
+    </section>
+
     <section class="campaign-list-section">
       <ul id="campaignList" class="campaign-list"></ul>
       <p id="campaignEmptyState" class="campaign-empty-state" hidden>No campaigns found for this filter.</p>
       <p id="dashboardError" class="dashboard-error" hidden>Unable to load campaigns right now.</p>
+    </section>
+
+    <section id="volunteerParticipationSection" class="campaign-list-section" hidden>
+      <h2>Your Campaign Participation</h2>
+      <ul id="volunteerCampaignList" class="campaign-list"></ul>
+      <p id="volunteerCampaignEmpty" class="campaign-empty-state" hidden>
+        You have not joined any campaigns yet.
+      </p>
     </section>
 
     <div class="page-actions">
