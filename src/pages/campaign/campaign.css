@@ -33,6 +33,31 @@
   margin: 0.6rem 0 0;
   font-weight: 700;
   color: #1c3b63;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.campaign-overview-status {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.campaign-overview-status.is-ongoing {
+  background: #dff5e6;
+  border: 1px solid #9fd8b2;
+  color: #0c6a2e;
+}
+
+.campaign-overview-status.is-ended {
+  background: #ffe4e4;
+  border: 1px solid #f1b3b3;
+  color: #8f1f1f;
 }
 
 .campaign-description {

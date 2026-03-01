@@ -426,7 +426,10 @@ export async function renderCampaignPage(mountNode, params = {}) {
 
     document.title = `${campaignData.title} - Volunteer Coordination Platform`;
     titleEl.textContent = campaignData.title;
-    campaignStatus.innerHTML = `<strong>Status:</strong> ${campaignData.status}`;
+    const isEnded = campaignData.status === "done";
+    campaignStatus.innerHTML = `<strong>Campaign Status:</strong> <span class="campaign-overview-status ${
+      isEnded ? "is-ended" : "is-ongoing"
+    }">${isEnded ? "ENDED" : "ONGOING"}</span>`;
     orgEl.innerHTML = `<strong>Organization:</strong> ${campaignData.organization}`;
     locationEl.innerHTML = `<strong>Location:</strong> ${campaignData.location}`;
     datesEl.innerHTML = `<strong>Dates:</strong> ${formatDateTime(campaignData.start_at)} - ${formatDateTime(campaignData.end_at)}`;

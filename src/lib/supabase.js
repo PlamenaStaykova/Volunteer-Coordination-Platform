@@ -148,6 +148,7 @@ const profileSelectColumns = [
   "phone",
   "organization_name",
   "campaign_manager",
+  "volunteer_skills",
 ].join(", ");
 
 export async function getUserType(user = null) {
@@ -246,6 +247,11 @@ export async function updateUserProfile(payload, user = null) {
   const email = String(payload?.email || currentUser.email || "").trim();
   const organizationName = String(payload?.organization_name || "").trim();
   const campaignManager = String(payload?.campaign_manager || "").trim();
+  const volunteerSkills = Array.isArray(payload?.volunteer_skills)
+    ? payload.volunteer_skills
+        .map((skill) => String(skill || "").trim())
+        .filter(Boolean)
+    : [];
 
   const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
   const displayName =
@@ -265,6 +271,7 @@ export async function updateUserProfile(payload, user = null) {
     phone: phone || null,
     organization_name: resolvedUserType === "organizer" ? organizationName || null : null,
     campaign_manager: resolvedUserType === "organizer" ? campaignManager || displayName : null,
+    volunteer_skills: resolvedUserType === "volunteer" ? volunteerSkills : [],
   };
 
   const { data, error } = await supabase

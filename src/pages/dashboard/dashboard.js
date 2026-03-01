@@ -24,6 +24,19 @@ import {
   updateCampaignWithShift,
 } from "../../lib/supabase.js";
 
+const VOLUNTEER_SKILLS = [
+  "Time Management",
+  "First Aid",
+  "Communication",
+  "Teamwork",
+  "Event Planning",
+  "Child Care",
+  "Elderly Care",
+  "Fundraising",
+  "Logistics Coordination",
+  "Public Speaking",
+];
+
 function formatDateTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -197,6 +210,9 @@ export async function renderDashboardPage(mountNode) {
   const profileLastName = mountNode.querySelector("#profileLastName");
   const profileEmail = mountNode.querySelector("#profileEmail");
   const profilePhone = mountNode.querySelector("#profilePhone");
+  const volunteerSkillsFields = mountNode.querySelector("#volunteerSkillsFields");
+  const selectedSkillsLine = mountNode.querySelector("#selectedSkillsLine");
+  const profileSkillsGrid = mountNode.querySelector("#profileSkillsGrid");
   const organizerProfileFields = mountNode.querySelector("#organizerProfileFields");
   const profileOrganizationName = mountNode.querySelector("#profileOrganizationName");
   const profileCampaignManager = mountNode.querySelector("#profileCampaignManager");
@@ -226,10 +242,12 @@ export async function renderDashboardPage(mountNode) {
   const [userType, isAdmin] = await Promise.all([getUserType(user), getIsAdmin(user)]);
   const canManageCampaigns = userType === "organizer" || isAdmin;
   const isVolunteer = userType === "volunteer" && !isAdmin;
+  const showOrganizerProfileFields = userType === "organizer";
 
   adminPanel.hidden = !canManageCampaigns;
   volunteerParticipationSection.hidden = !isVolunteer;
-  organizerProfileFields.hidden = !canManageCampaigns;
+  organizerProfileFields.hidden = !showOrganizerProfileFields;
+  volunteerSkillsFields.hidden = !isVolunteer;
 
   let allCampaigns = [];
   let joinedCampaignIds = new Set();
@@ -237,6 +255,73 @@ export async function renderDashboardPage(mountNode) {
   let volunteerDirectory = [];
   let selectedApplicationsCampaignId = null;
   let activeFilter = "total";
+  let savedVolunteerSkills = [];
+
+  const normalizeVolunteerSkills = (skills = []) => {
+    const unique = new Set();
+    for (const skill of Array.isArray(skills) ? skills : []) {
+      const normalized = String(skill || "").trim();
+      if (VOLUNTEER_SKILLS.includes(normalized)) {
+        unique.add(normalized);
+      }
+    }
+    return [...unique];
+  };
+
+  const updateSelectedSkillsLine = () => {
+    if (!selectedSkillsLine) {
+      return;
+    }
+
+    selectedSkillsLine.textContent =
+      savedVolunteerSkills.length > 0
+        ? `Selected: ${savedVolunteerSkills.join(", ")}`
+        : "Selected: None";
+  };
+
+  const renderVolunteerSkillsOptions = () => {
+    if (!profileSkillsGrid) {
+      return;
+    }
+
+    profileSkillsGrid.innerHTML = "";
+    const selectedSet = new Set(savedVolunteerSkills);
+    const availableSkills = VOLUNTEER_SKILLS.filter((skill) => !selectedSet.has(skill));
+
+    if (availableSkills.length === 0) {
+      const helper = document.createElement("p");
+      helper.className = "skills-help";
+      helper.textContent = "All available skills are already selected.";
+      profileSkillsGrid.append(helper);
+      return;
+    }
+
+    for (const skill of availableSkills) {
+      const label = document.createElement("label");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.name = "volunteerSkills";
+      checkbox.value = skill;
+      label.append(checkbox, document.createTextNode(skill));
+      profileSkillsGrid.append(label);
+    }
+  };
+
+  const getPendingVolunteerSkills = () => {
+    if (!profileSkillsGrid) {
+      return [];
+    }
+    return normalizeVolunteerSkills(
+      [...profileSkillsGrid.querySelectorAll('input[name="volunteerSkills"]:checked')]
+      .map((input) => input.value)
+    );
+  };
+
+  const setSavedVolunteerSkills = (skills = []) => {
+    savedVolunteerSkills = normalizeVolunteerSkills(skills);
+    updateSelectedSkillsLine();
+    renderVolunteerSkillsOptions();
+  };
 
   const findOrganizerCampaignById = (campaignId) => {
     return organizerCampaigns.find((campaign) => campaign.id === campaignId) || null;
@@ -533,9 +618,12 @@ export async function renderDashboardPage(mountNode) {
     profileEmail.value = data?.email || user.email || "";
     profilePhone.value = data?.phone || "";
 
-    if (canManageCampaigns) {
+    if (showOrganizerProfileFields) {
       profileOrganizationName.value = data?.organization_name || "";
       profileCampaignManager.value = data?.campaign_manager || "";
+    }
+    if (isVolunteer) {
+      setSavedVolunteerSkills(data?.volunteer_skills || []);
     }
   };
 
@@ -647,13 +735,19 @@ export async function renderDashboardPage(mountNode) {
   profileForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
+    const mergedVolunteerSkills = normalizeVolunteerSkills([
+      ...savedVolunteerSkills,
+      ...getPendingVolunteerSkills(),
+    ]);
+
     const payload = {
       first_name: profileFirstName.value,
       last_name: profileLastName.value,
       email: profileEmail.value,
       phone: profilePhone.value,
-      organization_name: canManageCampaigns ? profileOrganizationName.value : "",
-      campaign_manager: canManageCampaigns ? profileCampaignManager.value : "",
+      organization_name: showOrganizerProfileFields ? profileOrganizationName.value : "",
+      campaign_manager: showOrganizerProfileFields ? profileCampaignManager.value : "",
+      volunteer_skills: isVolunteer ? mergedVolunteerSkills : [],
       user_type: userType === "organizer" ? "organizer" : "volunteer",
     };
 
@@ -672,15 +766,19 @@ export async function renderDashboardPage(mountNode) {
     profileLastName.value = data?.last_name || payload.last_name.trim();
     profileEmail.value = data?.email || payload.email.trim();
     profilePhone.value = data?.phone || payload.phone.trim();
-    if (canManageCampaigns) {
+    if (showOrganizerProfileFields) {
       profileOrganizationName.value = data?.organization_name || payload.organization_name.trim();
       profileCampaignManager.value = data?.campaign_manager || payload.campaign_manager.trim();
+    }
+    if (isVolunteer) {
+      setSavedVolunteerSkills(data?.volunteer_skills || payload.volunteer_skills);
     }
 
     setInlineMessage(profileMessage, "Profile saved.", "success");
     await loadCampaignData();
   });
 
+  renderVolunteerSkillsOptions();
   if (canManageCampaigns) {
     createCampaignForm.addEventListener("submit", async (event) => {
       event.preventDefault();
