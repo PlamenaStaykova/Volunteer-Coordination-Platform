@@ -4,6 +4,14 @@
     <nav class="nav-links" aria-label="Main navigation">
       <a data-nav="home" href="/">Home</a>
       <a data-nav="dashboard" href="/dashboard/">Dashboard</a>
+      <div id="authSection" class="header-auth-section">
+        <span id="userEmail" class="user-email"></span>
+        <button id="logoutButton" class="btn-logout">Log Out</button>
+      </div>
+      <div id="noAuthSection" class="header-no-auth-section">
+        <a data-nav="login" href="/login">Log In</a>
+        <a data-nav="register" href="/register">Register</a>
+      </div>
     </nav>
   </div>
 </header>
