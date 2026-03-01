@@ -16,7 +16,6 @@ import {
   getUserProfile,
   getUserType,
   getVolunteerDirectory,
-  getVolunteerParticipationCampaigns,
   joinCampaign,
   leaveCampaign,
   setCampaignStatus,
@@ -62,6 +61,9 @@ function toDateInputValue(value) {
 }
 
 function getFilterPredicate(filter) {
+  if (filter === "ongoing-apply") {
+    return (campaign) => campaign.state === "open";
+  }
   if (filter === "open") {
     return (campaign) => campaign.state === "open";
   }
@@ -158,7 +160,7 @@ function renderCampaignList(campaigns, mountNode, context) {
           const leaveButton = document.createElement("button");
           leaveButton.type = "button";
           leaveButton.className = "btn btn-neutral btn-small";
-          leaveButton.textContent = "Leave Campaign";
+          leaveButton.textContent = context.useApplicationLabels ? "Cancel Application" : "Leave Campaign";
           leaveButton.addEventListener("click", async () => {
             await context.onLeaveCampaign(campaign.id);
           });
@@ -167,7 +169,12 @@ function renderCampaignList(campaigns, mountNode, context) {
           const joinButton = document.createElement("button");
           joinButton.type = "button";
           joinButton.className = "btn btn-small";
-          joinButton.textContent = campaign.vacancies > 0 ? "Join Campaign" : "Campaign Full";
+          joinButton.textContent =
+            campaign.vacancies > 0
+              ? context.useApplicationLabels
+                ? "Apply"
+                : "Join Campaign"
+              : "Campaign Full";
           joinButton.disabled = campaign.vacancies <= 0;
           joinButton.addEventListener("click", async () => {
             await context.onJoinCampaign(campaign.id);
@@ -222,10 +229,8 @@ export async function renderDashboardPage(mountNode) {
   const allCampaignsCount = mountNode.querySelector("#allCampaignsCount");
   const dashboardError = mountNode.querySelector("#dashboardError");
   const filterTabs = mountNode.querySelectorAll(".filter-tab");
+  const volunteerApplyTab = mountNode.querySelector("#volunteerApplyTab");
   const adminPanel = mountNode.querySelector("#adminPanel");
-  const volunteerParticipationSection = mountNode.querySelector("#volunteerParticipationSection");
-  const volunteerCampaignList = mountNode.querySelector("#volunteerCampaignList");
-  const volunteerCampaignEmpty = mountNode.querySelector("#volunteerCampaignEmpty");
 
   const createCampaignForm = mountNode.querySelector("#createCampaignForm");
   const createCampaignMessage = mountNode.querySelector("#createCampaignMessage");
@@ -246,9 +251,11 @@ export async function renderDashboardPage(mountNode) {
   const showOrganizerProfileFields = userType === "organizer";
 
   adminPanel.hidden = !canManageCampaigns;
-  volunteerParticipationSection.hidden = !isVolunteer;
   organizerProfileFields.hidden = !showOrganizerProfileFields;
   volunteerSkillsFields.hidden = !isVolunteer;
+  if (volunteerApplyTab) {
+    volunteerApplyTab.hidden = !isVolunteer;
+  }
 
   let allCampaigns = [];
   let joinedCampaignIds = new Set();
@@ -370,29 +377,6 @@ export async function renderDashboardPage(mountNode) {
 
   const findOrganizerCampaignById = (campaignId) => {
     return organizerCampaigns.find((campaign) => campaign.id === campaignId) || null;
-  };
-
-  const renderVolunteerParticipation = (campaigns) => {
-    volunteerCampaignList.innerHTML = "";
-    volunteerCampaignEmpty.hidden = campaigns.length !== 0;
-
-    for (const campaign of campaigns) {
-      const item = document.createElement("li");
-      item.className = "campaign-item";
-      item.innerHTML = `
-        <article class="campaign-card">
-          <header class="campaign-header">
-            <h3><a class="campaign-title-link" href="/campaign/${campaign.id}">${campaign.title}</a></h3>
-            <span class="campaign-status ${campaign.participation_status === "attended" ? "is-done" : "is-open"}">
-              ${campaign.participation_status === "attended" ? "Participated" : "Joined"}
-            </span>
-          </header>
-          <p class="campaign-meta"><strong>Starts:</strong> ${formatDateTime(campaign.start_at)}</p>
-          <p class="campaign-meta"><strong>Ends:</strong> ${formatDateTime(campaign.end_at)}</p>
-        </article>
-      `;
-      volunteerCampaignList.append(item);
-    }
   };
 
   const loadApplicationsForCampaign = async (campaignId) => {
@@ -619,6 +603,7 @@ export async function renderDashboardPage(mountNode) {
     renderCampaignList(filteredCampaigns, mountNode, {
       userType,
       isAdmin,
+      useApplicationLabels: activeFilter === "ongoing-apply",
       joinedCampaignIds,
       onJoinCampaign: async (campaignId) => {
         const { error } = await joinCampaign(campaignId);
@@ -696,23 +681,15 @@ export async function renderDashboardPage(mountNode) {
       return;
     }
 
-    const [joinedResult, participationResult] = await Promise.all([
-      getJoinedCampaignIds(),
-      getVolunteerParticipationCampaigns(),
-    ]);
-
-    if (!joinedResult.error) {
-      joinedCampaignIds = new Set(joinedResult.data);
-    }
-
-    if (participationResult.error) {
-      volunteerCampaignList.innerHTML = "";
-      volunteerCampaignEmpty.hidden = false;
-      volunteerCampaignEmpty.textContent = participationResult.error.message || "Unable to load your participation.";
+    const joinedResult = await getJoinedCampaignIds();
+    if (joinedResult.error) {
+      dashboardError.hidden = false;
+      dashboardError.textContent = joinedResult.error.message || "Unable to load your joined campaigns.";
+      joinedCampaignIds = new Set();
       return;
     }
 
-    renderVolunteerParticipation(participationResult.data);
+    joinedCampaignIds = new Set(joinedResult.data);
   };
 
   const loadOrganizerData = async () => {
