@@ -3,13 +3,18 @@ import pageHtml from "./dashboard.html?raw";
 import { renderHeader } from "../../components/header/header.js";
 import { renderFooter } from "../../components/footer/footer.js";
 import {
+  adminCreateUser,
   assignVolunteerToCampaign,
   cancelCampaignApplication,
   createCampaignWithShift,
+  deleteAdminUser,
   deleteCampaign,
+  deleteHomeGalleryImage,
+  getAdminUsers,
   getCampaignApplications,
   getCampaignDashboardData,
   getCurrentUser,
+  getHomeGalleryImages,
   getIsAdmin,
   getJoinedCampaignIds,
   getOrganizerCampaigns,
@@ -20,6 +25,8 @@ import {
   joinCampaign,
   leaveCampaign,
   setCampaignStatus,
+  updateAdminUser,
+  uploadHomeGalleryImage,
   updateUserProfile,
   updateCampaignWithShift,
 } from "../../lib/supabase.js";
@@ -127,7 +134,7 @@ function renderCampaignList(campaigns, mountNode, context) {
   }
 
   campaignEmptyState.hidden = true;
-  const isVolunteer = context.userType === "volunteer" && !context.isAdmin;
+  const isVolunteer = context.userType === "volunteer" || context.isAdmin;
 
   for (const campaign of campaigns) {
     const item = document.createElement("li");
@@ -245,11 +252,28 @@ export async function renderDashboardPage(mountNode) {
   const assignCampaignSelect = mountNode.querySelector("#assignCampaignSelect");
   const assignVolunteerSelect = mountNode.querySelector("#assignVolunteerSelect");
   const assignVolunteerMessage = mountNode.querySelector("#assignVolunteerMessage");
+  const adminGalleryCard = mountNode.querySelector("#adminGalleryCard");
+  const galleryUploadForm = mountNode.querySelector("#galleryUploadForm");
+  const galleryTitle = mountNode.querySelector("#galleryTitle");
+  const gallerySortOrder = mountNode.querySelector("#gallerySortOrder");
+  const galleryImageFile = mountNode.querySelector("#galleryImageFile");
+  const galleryMessage = mountNode.querySelector("#galleryMessage");
+  const adminGalleryList = mountNode.querySelector("#adminGalleryList");
+  const adminGalleryEmpty = mountNode.querySelector("#adminGalleryEmpty");
+  const adminUsersCard = mountNode.querySelector("#adminUsersCard");
+  const adminCreateUserForm = mountNode.querySelector("#adminCreateUserForm");
+  const newUserEmail = mountNode.querySelector("#newUserEmail");
+  const newUserPassword = mountNode.querySelector("#newUserPassword");
+  const newUserDisplayName = mountNode.querySelector("#newUserDisplayName");
+  const newUserRole = mountNode.querySelector("#newUserRole");
+  const adminUsersMessage = mountNode.querySelector("#adminUsersMessage");
+  const adminUserList = mountNode.querySelector("#adminUserList");
+  const adminUserEmpty = mountNode.querySelector("#adminUserEmpty");
 
   const [userType, isAdmin] = await Promise.all([getUserType(user), getIsAdmin(user)]);
   const canManageCampaigns = userType === "organizer" || isAdmin;
   const isVolunteer = userType === "volunteer" && !isAdmin;
-  const showOrganizerProfileFields = userType === "organizer";
+  const showOrganizerProfileFields = userType === "organizer" || isAdmin;
 
   adminPanel.hidden = !canManageCampaigns;
   organizerProfileFields.hidden = !showOrganizerProfileFields;
@@ -257,12 +281,20 @@ export async function renderDashboardPage(mountNode) {
   if (volunteerMyCampaignsTab) {
     volunteerMyCampaignsTab.hidden = !isVolunteer;
   }
+  if (adminGalleryCard) {
+    adminGalleryCard.hidden = !isAdmin;
+  }
+  if (adminUsersCard) {
+    adminUsersCard.hidden = !isAdmin;
+  }
 
   let allCampaigns = [];
   let joinedCampaignIds = new Set();
   let volunteerCampaignIds = new Set();
   let organizerCampaigns = [];
   let volunteerDirectory = [];
+  let adminUsers = [];
+  let homeGalleryImages = [];
   let selectedApplicationsCampaignId = null;
   let activeFilter = "total";
   let savedVolunteerSkills = [];
@@ -375,6 +407,198 @@ export async function renderDashboardPage(mountNode) {
     updateSelectedSkillsLine();
     renderSelectedSkillsEditor();
     renderVolunteerSkillsOptions();
+  };
+
+  const renderHomeGalleryAdminList = () => {
+    if (!adminGalleryList || !adminGalleryEmpty) {
+      return;
+    }
+
+    adminGalleryList.innerHTML = "";
+    adminGalleryEmpty.hidden = homeGalleryImages.length !== 0;
+
+    for (const image of homeGalleryImages) {
+      const item = document.createElement("li");
+      item.className = "application-item gallery-admin-item";
+      item.innerHTML = `
+        <p><strong>${image.title}</strong></p>
+        <p>Sort Order: ${image.sort_order}</p>
+        <img src="${image.image_url}" alt="${image.title || "Home gallery"}" loading="lazy" />
+      `;
+
+      const actions = document.createElement("div");
+      actions.className = "item-actions";
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "btn btn-small btn-danger";
+      deleteButton.textContent = "Delete Image";
+      deleteButton.addEventListener("click", async () => {
+        const shouldDelete = window.confirm(`Delete image "${image.title}"?`);
+        if (!shouldDelete) {
+          return;
+        }
+
+        const { error } = await deleteHomeGalleryImage(image.id, image.image_path);
+        if (error) {
+          setInlineMessage(galleryMessage, error.message || "Failed to delete image.");
+          return;
+        }
+
+        setInlineMessage(galleryMessage, "Image deleted.", "success");
+        await loadHomeGalleryData();
+      });
+      actions.append(deleteButton);
+      item.append(actions);
+      adminGalleryList.append(item);
+    }
+  };
+
+  const renderAdminUsers = () => {
+    if (!adminUserList || !adminUserEmpty) {
+      return;
+    }
+
+    adminUserList.innerHTML = "";
+    adminUserEmpty.hidden = adminUsers.length !== 0;
+
+    for (const adminUser of adminUsers) {
+      const item = document.createElement("li");
+      item.className = "user-admin-item";
+
+      item.innerHTML = `
+        <div class="user-admin-main">
+          <p><strong>${adminUser.email || "No email"}</strong></p>
+          <p>User ID: ${adminUser.user_id}</p>
+          <p>Created: ${formatDateTime(adminUser.created_at)}</p>
+        </div>
+        <div class="user-admin-edit">
+          <label>
+            Display Name
+            <input data-field="display_name" type="text" value="${adminUser.display_name || ""}" />
+          </label>
+          <label>
+            First Name
+            <input data-field="first_name" type="text" value="${adminUser.first_name || ""}" />
+          </label>
+          <label>
+            Last Name
+            <input data-field="last_name" type="text" value="${adminUser.last_name || ""}" />
+          </label>
+          <label>
+            Phone
+            <input data-field="phone" type="text" value="${adminUser.phone || ""}" />
+          </label>
+          <label>
+            Role
+            <select data-field="user_type">
+              <option value="volunteer" ${adminUser.user_type === "volunteer" ? "selected" : ""}>Volunteer</option>
+              <option value="organizer" ${adminUser.user_type === "organizer" ? "selected" : ""}>Organizer</option>
+            </select>
+          </label>
+          <label>
+            Admin
+            <select data-field="is_admin">
+              <option value="false" ${adminUser.is_admin ? "" : "selected"}>No</option>
+              <option value="true" ${adminUser.is_admin ? "selected" : ""}>Yes</option>
+            </select>
+          </label>
+        </div>
+      `;
+
+      const actions = document.createElement("div");
+      actions.className = "item-actions";
+
+      const saveButton = document.createElement("button");
+      saveButton.type = "button";
+      saveButton.className = "btn btn-small";
+      saveButton.textContent = "Save User";
+      saveButton.addEventListener("click", async () => {
+        const displayName = item.querySelector('[data-field="display_name"]').value;
+        const firstName = item.querySelector('[data-field="first_name"]').value;
+        const lastName = item.querySelector('[data-field="last_name"]').value;
+        const phone = item.querySelector('[data-field="phone"]').value;
+        const selectedRole = item.querySelector('[data-field="user_type"]').value;
+        const selectedIsAdmin = item.querySelector('[data-field="is_admin"]').value === "true";
+
+        const { error } = await updateAdminUser({
+          user_id: adminUser.user_id,
+          display_name: displayName,
+          first_name: firstName,
+          last_name: lastName,
+          phone,
+          user_type: selectedRole,
+          is_admin: selectedIsAdmin,
+        });
+
+        if (error) {
+          setInlineMessage(adminUsersMessage, error.message || "Failed to update user.");
+          return;
+        }
+
+        setInlineMessage(adminUsersMessage, "User updated.", "success");
+        await loadAdminUsersData();
+      });
+      actions.append(saveButton);
+
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "btn btn-small btn-danger";
+      deleteButton.textContent = "Delete User";
+      deleteButton.disabled = adminUser.user_id === user.id;
+      deleteButton.addEventListener("click", async () => {
+        const shouldDelete = window.confirm(`Delete user "${adminUser.email}"?`);
+        if (!shouldDelete) {
+          return;
+        }
+
+        const { error } = await deleteAdminUser(adminUser.user_id);
+        if (error) {
+          setInlineMessage(adminUsersMessage, error.message || "Failed to delete user.");
+          return;
+        }
+
+        setInlineMessage(adminUsersMessage, "User deleted.", "success");
+        await loadAdminUsersData();
+      });
+      actions.append(deleteButton);
+
+      item.append(actions);
+      adminUserList.append(item);
+    }
+  };
+
+  const loadHomeGalleryData = async () => {
+    if (!isAdmin) {
+      return;
+    }
+
+    const { data, error } = await getHomeGalleryImages();
+    if (error) {
+      setInlineMessage(galleryMessage, error.message || "Unable to load home gallery.");
+      homeGalleryImages = [];
+    } else {
+      homeGalleryImages = data ?? [];
+      setInlineMessage(galleryMessage, "");
+    }
+
+    renderHomeGalleryAdminList();
+  };
+
+  const loadAdminUsersData = async () => {
+    if (!isAdmin) {
+      return;
+    }
+
+    const { data, error } = await getAdminUsers();
+    if (error) {
+      setInlineMessage(adminUsersMessage, error.message || "Unable to load users.");
+      adminUsers = [];
+    } else {
+      adminUsers = data ?? [];
+      setInlineMessage(adminUsersMessage, "");
+    }
+
+    renderAdminUsers();
   };
 
   const findOrganizerCampaignById = (campaignId) => {
@@ -880,9 +1104,57 @@ export async function renderDashboardPage(mountNode) {
     });
   }
 
+  if (isAdmin) {
+    galleryUploadForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const file = galleryImageFile.files?.[0] || null;
+      if (!file) {
+        setInlineMessage(galleryMessage, "Select an image file first.");
+        return;
+      }
+
+      const { error } = await uploadHomeGalleryImage(file, galleryTitle.value, gallerySortOrder.value);
+      if (error) {
+        setInlineMessage(galleryMessage, error.message || "Unable to upload image.");
+        return;
+      }
+
+      galleryUploadForm.reset();
+      gallerySortOrder.value = "0";
+      setInlineMessage(galleryMessage, "Image uploaded.", "success");
+      await loadHomeGalleryData();
+    });
+
+    adminCreateUserForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const email = newUserEmail.value.trim();
+      const password = newUserPassword.value;
+      const role = newUserRole.value;
+      const displayName = newUserDisplayName.value.trim();
+      if (!email || !password || !displayName) {
+        setInlineMessage(adminUsersMessage, "Email, password, and display name are required.");
+        return;
+      }
+
+      const { error } = await adminCreateUser(email, password, role, displayName);
+      if (error) {
+        setInlineMessage(adminUsersMessage, error.message || "Unable to create user.");
+        return;
+      }
+
+      adminCreateUserForm.reset();
+      newUserRole.value = "volunteer";
+      setInlineMessage(adminUsersMessage, "User account created.", "success");
+      await loadAdminUsersData();
+    });
+  }
+
   await loadProfileData();
   await loadVolunteerData();
   await loadOrganizerData();
+  await loadHomeGalleryData();
+  await loadAdminUsersData();
   await loadCampaignData();
 
   mountNode.append(renderFooter());

@@ -11,6 +11,15 @@ if (!hasSupabaseConfig) {
 }
 
 export const supabase = hasSupabaseConfig ? createClient(supabaseUrl, supabaseKey) : null;
+const adminSignupClient = hasSupabaseConfig
+  ? createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    })
+  : null;
 
 // Get the currently authenticated user
 export async function getCurrentUser() {
@@ -122,6 +131,77 @@ export async function getPublicCampaignOverview() {
 
   const { data, error } = await supabase.rpc("get_public_campaign_overview");
   return { data: data ?? [], error };
+}
+
+export async function getHomeGalleryImages() {
+  if (!supabase) {
+    return { data: [], error: new Error(missingConfigMessage) };
+  }
+
+  const { data, error } = await supabase.rpc("get_home_gallery_images");
+  return { data: data ?? [], error };
+}
+
+export async function uploadHomeGalleryImage(file, title = "", sortOrder = 0) {
+  if (!supabase) {
+    return { data: null, error: new Error(missingConfigMessage) };
+  }
+
+  const user = await getCurrentUser();
+  if (!user) {
+    return { data: null, error: new Error("User not authenticated.") };
+  }
+
+  const fileName = String(file?.name || "image").replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${user.id}/${Date.now()}-${fileName}`;
+
+  const { error: uploadError } = await supabase.storage.from("home-gallery").upload(path, file, {
+    upsert: false,
+  });
+  if (uploadError) {
+    return { data: null, error: uploadError };
+  }
+
+  const { data: publicUrlData } = supabase.storage.from("home-gallery").getPublicUrl(path);
+  const imageUrl = publicUrlData?.publicUrl || "";
+
+  const { data, error } = await supabase
+    .from("home_gallery_images")
+    .insert({
+      title: String(title || "").trim() || "Home Gallery Image",
+      image_path: path,
+      image_url: imageUrl,
+      sort_order: Number.isFinite(Number(sortOrder)) ? Number(sortOrder) : 0,
+      created_by: user.id,
+    })
+    .select("id, title, image_url, image_path, sort_order")
+    .single();
+
+  if (error) {
+    await supabase.storage.from("home-gallery").remove([path]);
+  }
+
+  return { data, error };
+}
+
+export async function deleteHomeGalleryImage(imageId, imagePath) {
+  if (!supabase) {
+    return { error: new Error(missingConfigMessage) };
+  }
+
+  const { error: deleteRowError } = await supabase.from("home_gallery_images").delete().eq("id", imageId);
+  if (deleteRowError) {
+    return { error: deleteRowError };
+  }
+
+  if (imagePath) {
+    const { error: deleteStorageError } = await supabase.storage.from("home-gallery").remove([imagePath]);
+    if (deleteStorageError) {
+      return { error: deleteStorageError };
+    }
+  }
+
+  return { error: null };
 }
 
 export async function getCampaignDashboardItem(campaignId) {
@@ -313,6 +393,89 @@ export async function getIsAdmin(user = null) {
   }
 
   return (count ?? 0) > 0;
+}
+
+export async function getAdminUsers() {
+  if (!supabase) {
+    return { data: [], error: new Error(missingConfigMessage) };
+  }
+
+  const { data, error } = await supabase.rpc("admin_list_users");
+  return { data: data ?? [], error };
+}
+
+export async function updateAdminUser(userPayload) {
+  if (!supabase) {
+    return { error: new Error(missingConfigMessage) };
+  }
+
+  const params = {
+    p_user_id: userPayload.user_id,
+    p_display_name: userPayload.display_name || null,
+    p_first_name: userPayload.first_name || null,
+    p_last_name: userPayload.last_name || null,
+    p_phone: userPayload.phone || null,
+    p_user_type: userPayload.user_type || "volunteer",
+    p_is_admin: Boolean(userPayload.is_admin),
+  };
+
+  const { error } = await supabase.rpc("admin_update_user", params);
+  return { error };
+}
+
+export async function deleteAdminUser(userId) {
+  if (!supabase) {
+    return { error: new Error(missingConfigMessage) };
+  }
+
+  const { error } = await supabase.rpc("admin_delete_user", { p_user_id: userId });
+  return { error };
+}
+
+export async function adminCreateUser(email, password, role = "volunteer", displayName = "") {
+  if (!adminSignupClient) {
+    return { data: null, error: new Error(missingConfigMessage) };
+  }
+
+  const normalizedRole = role === "organizer" ? "organizer" : role === "admin" ? "volunteer" : "volunteer";
+  const metadata = {
+    user_type: normalizedRole,
+    display_name: displayName || email.split("@")[0],
+  };
+
+  const { data, error } = await adminSignupClient.auth.signUp({
+    email,
+    password,
+    options: {
+      data: metadata,
+    },
+  });
+
+  if (error) {
+    return { data: null, error };
+  }
+
+  const createdUserId = data?.user?.id;
+  if (!createdUserId) {
+    return { data, error: null };
+  }
+
+  if (role === "admin" || normalizedRole === "organizer") {
+    const { error: updateError } = await updateAdminUser({
+      user_id: createdUserId,
+      display_name: metadata.display_name,
+      first_name: "",
+      last_name: "",
+      phone: "",
+      user_type: normalizedRole,
+      is_admin: role === "admin",
+    });
+    if (updateError) {
+      return { data, error: updateError };
+    }
+  }
+
+  return { data, error: null };
 }
 
 export async function getOrganizerCampaigns() {
@@ -715,7 +878,8 @@ export async function joinCampaign(campaignId) {
   }
 
   const userType = await getUserType(user);
-  if (userType !== "volunteer") {
+  const isAdmin = await getIsAdmin(user);
+  if (userType !== "volunteer" && !isAdmin) {
     return { error: new Error("Only volunteers can join campaigns.") };
   }
 
@@ -763,7 +927,8 @@ export async function leaveCampaign(campaignId) {
   }
 
   const userType = await getUserType(user);
-  if (userType !== "volunteer") {
+  const isAdmin = await getIsAdmin(user);
+  if (userType !== "volunteer" && !isAdmin) {
     return { error: new Error("Only volunteers can leave campaigns.") };
   }
 

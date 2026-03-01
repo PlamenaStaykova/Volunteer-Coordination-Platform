@@ -2,7 +2,7 @@ import "./index.css";
 import pageHtml from "./index.html?raw";
 import { renderHeader } from "../../components/header/header.js";
 import { renderFooter } from "../../components/footer/footer.js";
-import { getPublicCampaignOverview } from "../../lib/supabase.js";
+import { getHomeGalleryImages, getPublicCampaignOverview } from "../../lib/supabase.js";
 
 function formatDateTime(value) {
   const date = new Date(value);
@@ -25,9 +25,44 @@ export async function renderIndexPage(mountNode) {
   pageContainer.innerHTML = pageHtml;
   mountNode.append(pageContainer.firstElementChild);
 
+  const homeGalleryList = mountNode.querySelector("#homeGalleryList");
   const publicCampaignList = mountNode.querySelector("#publicCampaignList");
   const publicCampaignEmpty = mountNode.querySelector("#publicCampaignEmpty");
   const publicCampaignError = mountNode.querySelector("#publicCampaignError");
+
+  const { data: galleryImages } = await getHomeGalleryImages();
+  homeGalleryList.innerHTML = "";
+  if ((galleryImages ?? []).length > 0) {
+    for (const [index, image] of galleryImages.entries()) {
+      const item = document.createElement("article");
+      item.className = `gallery-item ${index === 0 ? "gallery-item-wide" : ""}`;
+      item.innerHTML = `
+        <div class="gallery-photo-wrap">
+          <img src="${image.image_url}" alt="${image.title || "Volunteer campaign image"}" loading="lazy" />
+          <span>${image.title || "Campaign Moment"}</span>
+        </div>
+      `;
+      homeGalleryList.append(item);
+    }
+  } else {
+    const placeholders = [
+      "Community Cleanup Day",
+      "Food Drive Support",
+      "Youth Mentorship Program",
+      "Senior Care Visit",
+      "Disaster Relief Logistics",
+    ];
+    for (const [index, title] of placeholders.entries()) {
+      const item = document.createElement("article");
+      item.className = `gallery-item ${index === 0 ? "gallery-item-wide" : ""}`;
+      item.innerHTML = `
+        <div class="gallery-placeholder">
+          <span>${title}</span>
+        </div>
+      `;
+      homeGalleryList.append(item);
+    }
+  }
 
   const { data, error } = await getPublicCampaignOverview();
   if (error) {

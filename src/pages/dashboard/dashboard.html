@@ -136,6 +136,58 @@
         <ul id="applicationsList" class="applications-list"></ul>
         <p id="applicationsEmpty" class="campaign-empty-state" hidden>No active applications for this campaign.</p>
       </article>
+
+      <article id="adminGalleryCard" class="admin-card admin-list-card" hidden>
+        <h3>Home Page Gallery</h3>
+        <form id="galleryUploadForm" class="admin-form compact-gallery-form">
+          <label>
+            Title
+            <input id="galleryTitle" type="text" maxlength="120" required />
+          </label>
+          <label>
+            Sort Order
+            <input id="gallerySortOrder" type="number" min="0" value="0" required />
+          </label>
+          <label>
+            Image
+            <input id="galleryImageFile" type="file" accept="image/*" required />
+          </label>
+          <button class="btn btn-small" type="submit">Upload Image</button>
+        </form>
+        <p id="galleryMessage" class="inline-message" hidden></p>
+        <ul id="adminGalleryList" class="applications-list"></ul>
+        <p id="adminGalleryEmpty" class="campaign-empty-state" hidden>No home page images uploaded yet.</p>
+      </article>
+
+      <article id="adminUsersCard" class="admin-card admin-list-card" hidden>
+        <h3>User Management</h3>
+        <form id="adminCreateUserForm" class="admin-form compact-admin-form">
+          <label>
+            Email
+            <input id="newUserEmail" type="email" required />
+          </label>
+          <label>
+            Password
+            <input id="newUserPassword" type="password" minlength="6" required />
+          </label>
+          <label>
+            Display Name
+            <input id="newUserDisplayName" type="text" required />
+          </label>
+          <label>
+            Role
+            <select id="newUserRole" required>
+              <option value="volunteer">Volunteer</option>
+              <option value="organizer">Organizer</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label>
+          <button class="btn btn-small" type="submit">Add User</button>
+        </form>
+        <p id="adminUsersMessage" class="inline-message" hidden></p>
+        <ul id="adminUserList" class="organizer-campaign-list"></ul>
+        <p id="adminUserEmpty" class="campaign-empty-state" hidden>No users found.</p>
+      </article>
     </section>
 
     <section class="campaign-list-section">

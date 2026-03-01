@@ -29,10 +29,13 @@
 }
 
 .home-gallery {
+  margin-bottom: 1.6rem;
+}
+
+.home-gallery-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
-  margin-bottom: 1.6rem;
 }
 
 .gallery-item {
@@ -56,7 +59,8 @@
   padding: 0.8rem;
 }
 
-.gallery-placeholder span {
+.gallery-placeholder span,
+.gallery-photo-wrap span {
   background: rgba(255, 255, 255, 0.88);
   border: 1px solid #d7e3f2;
   border-radius: 999px;
@@ -64,6 +68,28 @@
   font-size: 0.82rem;
   font-weight: 700;
   color: #274466;
+}
+
+.gallery-photo-wrap {
+  position: relative;
+  height: 100%;
+  border: 1px solid #cfdceb;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #eef4fb;
+}
+
+.gallery-photo-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.gallery-photo-wrap span {
+  position: absolute;
+  right: 0.8rem;
+  bottom: 0.8rem;
 }
 
 .public-campaigns {
@@ -159,7 +185,7 @@
 }
 
 @media (max-width: 700px) {
-  .home-gallery {
+  .home-gallery-grid {
     grid-template-columns: 1fr;
   }
 

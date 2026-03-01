@@ -124,7 +124,7 @@ export async function renderCampaignPage(mountNode, params = {}) {
   const applicationsEmpty = mountNode.querySelector("#applicationsEmpty");
 
   const [userType, isAdmin] = await Promise.all([getUserType(user), getIsAdmin(user)]);
-  const canVolunteerParticipate = userType === "volunteer" && !isAdmin;
+  const canVolunteerParticipate = userType === "volunteer" || isAdmin;
   let campaignData = null;
   let cancelActiveInlineEdit = null;
 
