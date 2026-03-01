@@ -17,6 +17,8 @@ $$;
 alter table public.profiles
 add column if not exists user_type text;
 
+drop view if exists public.users_with_roles;
+
 update public.profiles
 set user_type = lower(coalesce(user_type, 'volunteer'));
 
@@ -26,6 +28,9 @@ where user_type not in ('organizer', 'volunteer');
 
 alter table public.profiles
 drop constraint if exists profiles_user_type_check;
+
+alter table public.profiles
+alter column user_type drop default;
 
 alter table public.profiles
 alter column user_type type public.user_type_enum
@@ -70,3 +75,14 @@ begin
   return new;
 end;
 $$;
+
+create or replace view public.users_with_roles as
+select
+  au.id,
+  au.email,
+  p.display_name,
+  p.user_type,
+  au.created_at
+from auth.users au
+left join public.profiles p on p.id = au.id
+order by au.created_at desc;
