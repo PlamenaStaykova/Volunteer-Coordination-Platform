@@ -30,6 +30,7 @@
         <div id="volunteerSkillsFields" class="profile-form-row volunteer-skills-fields" hidden>
           <p class="skills-title">Skills</p>
           <p id="selectedSkillsLine" class="skills-selected-line">Selected: None</p>
+          <div id="selectedSkillsEditor" class="selected-skills-editor" aria-label="Selected skills" hidden></div>
           <p class="skills-help">Select your volunteer skills (up to 10):</p>
           <div id="profileSkillsGrid" class="skills-grid"></div>
         </div>
@@ -138,14 +139,6 @@
       <ul id="campaignList" class="campaign-list"></ul>
       <p id="campaignEmptyState" class="campaign-empty-state" hidden>No campaigns found for this filter.</p>
       <p id="dashboardError" class="dashboard-error" hidden>Unable to load campaigns right now.</p>
-    </section>
-
-    <section id="volunteerParticipationSection" class="campaign-list-section" hidden>
-      <h2>Your Campaign Participation</h2>
-      <ul id="volunteerCampaignList" class="campaign-list"></ul>
-      <p id="volunteerCampaignEmpty" class="campaign-empty-state" hidden>
-        You have not joined any campaigns yet.
-      </p>
     </section>
 
     <div class="page-actions">

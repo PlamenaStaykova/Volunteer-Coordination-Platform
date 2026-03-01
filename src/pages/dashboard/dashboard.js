@@ -212,6 +212,7 @@ export async function renderDashboardPage(mountNode) {
   const profilePhone = mountNode.querySelector("#profilePhone");
   const volunteerSkillsFields = mountNode.querySelector("#volunteerSkillsFields");
   const selectedSkillsLine = mountNode.querySelector("#selectedSkillsLine");
+  const selectedSkillsEditor = mountNode.querySelector("#selectedSkillsEditor");
   const profileSkillsGrid = mountNode.querySelector("#profileSkillsGrid");
   const organizerProfileFields = mountNode.querySelector("#organizerProfileFields");
   const profileOrganizationName = mountNode.querySelector("#profileOrganizationName");
@@ -279,10 +280,52 @@ export async function renderDashboardPage(mountNode) {
         : "Selected: None";
   };
 
+  const renderSelectedSkillsEditor = () => {
+    if (!selectedSkillsEditor) {
+      return;
+    }
+
+    selectedSkillsEditor.innerHTML = "";
+    if (savedVolunteerSkills.length === 0) {
+      selectedSkillsEditor.hidden = true;
+      return;
+    }
+
+    selectedSkillsEditor.hidden = false;
+    for (const skill of savedVolunteerSkills) {
+      const tag = document.createElement("div");
+      tag.className = "selected-skill-tag";
+
+      const label = document.createElement("span");
+      label.textContent = skill;
+
+      const removeButton = document.createElement("button");
+      removeButton.type = "button";
+      removeButton.className = "selected-skill-remove";
+      removeButton.textContent = "Remove";
+      removeButton.setAttribute("aria-label", `Remove ${skill}`);
+      removeButton.addEventListener("click", () => {
+        savedVolunteerSkills = savedVolunteerSkills.filter((value) => value !== skill);
+        updateSelectedSkillsLine();
+        renderSelectedSkillsEditor();
+        renderVolunteerSkillsOptions();
+      });
+
+      tag.append(label, removeButton);
+      selectedSkillsEditor.append(tag);
+    }
+  };
+
   const renderVolunteerSkillsOptions = () => {
     if (!profileSkillsGrid) {
       return;
     }
+
+    const pendingCheckedSkills = new Set(
+      [...profileSkillsGrid.querySelectorAll('input[name="volunteerSkills"]:checked')]
+        .map((input) => input.value)
+        .filter((value) => VOLUNTEER_SKILLS.includes(value))
+    );
 
     profileSkillsGrid.innerHTML = "";
     const selectedSet = new Set(savedVolunteerSkills);
@@ -302,6 +345,7 @@ export async function renderDashboardPage(mountNode) {
       checkbox.type = "checkbox";
       checkbox.name = "volunteerSkills";
       checkbox.value = skill;
+      checkbox.checked = pendingCheckedSkills.has(skill);
       label.append(checkbox, document.createTextNode(skill));
       profileSkillsGrid.append(label);
     }
@@ -320,6 +364,7 @@ export async function renderDashboardPage(mountNode) {
   const setSavedVolunteerSkills = (skills = []) => {
     savedVolunteerSkills = normalizeVolunteerSkills(skills);
     updateSelectedSkillsLine();
+    renderSelectedSkillsEditor();
     renderVolunteerSkillsOptions();
   };
 
