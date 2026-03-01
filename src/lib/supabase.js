@@ -115,6 +115,15 @@ export async function getCampaignDashboardData() {
   return { data: data ?? [], error };
 }
 
+export async function getPublicCampaignOverview() {
+  if (!supabase) {
+    return { data: [], error: new Error(missingConfigMessage) };
+  }
+
+  const { data, error } = await supabase.rpc("get_public_campaign_overview");
+  return { data: data ?? [], error };
+}
+
 export async function getCampaignDashboardItem(campaignId) {
   const { data, error } = await getCampaignDashboardData();
   if (error) {
