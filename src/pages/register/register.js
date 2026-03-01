@@ -4,8 +4,17 @@ import { renderHeader } from "../../components/header/header.js";
 import { renderFooter } from "../../components/footer/footer.js";
 import { signUp, getCurrentUser } from "../../lib/supabase.js";
 
+function getRoleFromQuery() {
+  const role = new URLSearchParams(window.location.search).get("role");
+  return role === "organizer" || role === "volunteer" ? role : null;
+}
+
 export async function renderRegisterPage(mountNode) {
-  document.title = "Register - Volunteer Coordination Platform";
+  const role = getRoleFromQuery();
+  const roleLabel = role ? role[0].toUpperCase() + role.slice(1) : "";
+  document.title = roleLabel
+    ? `${roleLabel} Register - Volunteer Coordination Platform`
+    : "Register - Volunteer Coordination Platform";
 
   // Check if user is already logged in
   const user = await getCurrentUser();
@@ -15,7 +24,8 @@ export async function renderRegisterPage(mountNode) {
   }
 
   mountNode.innerHTML = "";
-  mountNode.append(await renderHeader("register"));
+  const activeHeaderLink = role ? `${role}-register` : undefined;
+  mountNode.append(await renderHeader(activeHeaderLink));
 
   const pageContainer = document.createElement("div");
   pageContainer.innerHTML = pageHtml;
@@ -28,6 +38,15 @@ export async function renderRegisterPage(mountNode) {
   const emailInput = mountNode.querySelector("#registerEmail");
   const passwordInput = mountNode.querySelector("#registerPassword");
   const passwordConfirmInput = mountNode.querySelector("#registerPasswordConfirm");
+  const registerTitle = mountNode.querySelector("#registerTitle");
+  const registerSubtitle = mountNode.querySelector("#registerSubtitle");
+  const registerLoginLink = mountNode.querySelector("#registerLoginLink");
+
+  if (role && registerTitle && registerSubtitle && registerLoginLink) {
+    registerTitle.textContent = `${roleLabel} Registration`;
+    registerSubtitle.textContent = `Create your ${role} account to start using the platform.`;
+    registerLoginLink.href = `/login?role=${role}`;
+  }
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -67,7 +86,7 @@ export async function renderRegisterPage(mountNode) {
     registerButton.textContent = "Creating Account...";
 
     try {
-      const { data, error } = await signUp(email, password);
+      const { data, error } = await signUp(email, password, role);
 
       if (error) {
         authError.style.color = "";
@@ -82,7 +101,7 @@ export async function renderRegisterPage(mountNode) {
       authError.textContent = "Account created successfully! Redirecting to login...";
 
       setTimeout(() => {
-        window.location.href = "/login";
+        window.location.href = role ? `/login?role=${role}` : "/login";
       }, 2000);
     } catch (err) {
       authError.style.color = "";

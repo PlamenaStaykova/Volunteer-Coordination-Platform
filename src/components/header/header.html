@@ -9,8 +9,16 @@
         <button id="logoutButton" class="btn-logout">Log Out</button>
       </div>
       <div id="noAuthSection" class="header-no-auth-section">
-        <a data-nav="login" href="/login">Log In</a>
-        <a data-nav="register" href="/register">Register</a>
+        <div class="header-role-links">
+          <span class="header-role-label">Organizers</span>
+          <a data-nav="organizer-login" href="/login?role=organizer">Log In</a>
+          <a data-nav="organizer-register" href="/register?role=organizer">Register</a>
+        </div>
+        <div class="header-role-links">
+          <span class="header-role-label">Volunteers</span>
+          <a data-nav="volunteer-login" href="/login?role=volunteer">Log In</a>
+          <a data-nav="volunteer-register" href="/register?role=volunteer">Register</a>
+        </div>
       </div>
     </nav>
   </div>

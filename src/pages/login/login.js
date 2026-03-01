@@ -4,8 +4,17 @@ import { renderHeader } from "../../components/header/header.js";
 import { renderFooter } from "../../components/footer/footer.js";
 import { signIn, getCurrentUser } from "../../lib/supabase.js";
 
+function getRoleFromQuery() {
+  const role = new URLSearchParams(window.location.search).get("role");
+  return role === "organizer" || role === "volunteer" ? role : null;
+}
+
 export async function renderLoginPage(mountNode) {
-  document.title = "Log In - Volunteer Coordination Platform";
+  const role = getRoleFromQuery();
+  const roleLabel = role ? role[0].toUpperCase() + role.slice(1) : "";
+  document.title = roleLabel
+    ? `${roleLabel} Log In - Volunteer Coordination Platform`
+    : "Log In - Volunteer Coordination Platform";
 
   // Check if user is already logged in
   const user = await getCurrentUser();
@@ -15,7 +24,8 @@ export async function renderLoginPage(mountNode) {
   }
 
   mountNode.innerHTML = "";
-  mountNode.append(await renderHeader("login"));
+  const activeHeaderLink = role ? `${role}-login` : undefined;
+  mountNode.append(await renderHeader(activeHeaderLink));
 
   const pageContainer = document.createElement("div");
   pageContainer.innerHTML = pageHtml;
@@ -27,6 +37,15 @@ export async function renderLoginPage(mountNode) {
   const authError = mountNode.querySelector("#authError");
   const emailInput = mountNode.querySelector("#loginEmail");
   const passwordInput = mountNode.querySelector("#loginPassword");
+  const loginTitle = mountNode.querySelector("#loginTitle");
+  const loginSubtitle = mountNode.querySelector("#loginSubtitle");
+  const loginRegisterLink = mountNode.querySelector("#loginRegisterLink");
+
+  if (role && loginTitle && loginSubtitle && loginRegisterLink) {
+    loginTitle.textContent = `${roleLabel} Log In`;
+    loginSubtitle.textContent = `Welcome back! Log in to your ${role} account.`;
+    loginRegisterLink.href = `/register?role=${role}`;
+  }
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -62,7 +81,9 @@ export async function renderLoginPage(mountNode) {
       const { data, error } = await signIn(email, password);
 
       if (error) {
-        authError.textContent = error.message || "Failed to log in. Please check your credentials.";
+        authError.textContent =
+          error.message ||
+          `Failed to log in${role ? ` as ${role}` : ""}. Please check your credentials.`;
         loginButton.disabled = false;
         loginButton.textContent = "Log In";
         return;

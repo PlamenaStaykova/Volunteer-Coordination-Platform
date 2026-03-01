@@ -51,14 +51,18 @@ export async function getCurrentSession() {
 }
 
 // Sign up with email and password
-export async function signUp(email, password) {
+export async function signUp(email, password, role = null) {
   if (!supabase) {
     return { data: null, error: new Error(missingConfigMessage) };
   }
 
+  const metadata = role ? { user_type: role } : {};
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
+    options: {
+      data: metadata,
+    },
   });
   return { data, error };
 }

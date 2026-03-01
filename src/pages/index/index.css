@@ -52,10 +52,13 @@
   background: #fff;
   border: 1px solid #dce3eb;
   border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
 }
 
 .user-type-card h2 {
-  margin: 0 0 0.65rem;
+  margin: 0;
   font-size: 1.15rem;
 }
 
@@ -63,6 +66,20 @@
   margin: 0;
   color: #30445c;
   line-height: 1.45;
+}
+
+.user-type-actions {
+  margin-top: 0.25rem;
+}
+
+.user-type-card-organizer {
+  border-color: #b6d2ff;
+  background: #f8fbff;
+}
+
+.user-type-card-volunteer {
+  border-color: #bde3c4;
+  background: #f7fff9;
 }
 
 @media (max-width: 700px) {
