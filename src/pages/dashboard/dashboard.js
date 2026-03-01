@@ -16,6 +16,7 @@ import {
   getUserProfile,
   getUserType,
   getVolunteerDirectory,
+  getVolunteerParticipationCampaigns,
   joinCampaign,
   leaveCampaign,
   setCampaignStatus,
@@ -60,14 +61,14 @@ function toDateInputValue(value) {
   return `${year}-${month}-${day}`;
 }
 
-function getFilterPredicate(filter) {
-  if (filter === "ongoing-apply") {
+function getFilterPredicate(filter, context = {}) {
+  if (filter === "my-campaigns") {
+    return (campaign) => context.volunteerCampaignIds?.has(campaign.id) || false;
+  }
+  if (filter === "ongoing") {
     return (campaign) => campaign.state === "open";
   }
-  if (filter === "open") {
-    return (campaign) => campaign.state === "open";
-  }
-  if (filter === "done") {
+  if (filter === "ended") {
     return (campaign) => campaign.state === "done";
   }
   return () => true;
@@ -229,7 +230,7 @@ export async function renderDashboardPage(mountNode) {
   const allCampaignsCount = mountNode.querySelector("#allCampaignsCount");
   const dashboardError = mountNode.querySelector("#dashboardError");
   const filterTabs = mountNode.querySelectorAll(".filter-tab");
-  const volunteerApplyTab = mountNode.querySelector("#volunteerApplyTab");
+  const volunteerMyCampaignsTab = mountNode.querySelector("#volunteerMyCampaignsTab");
   const adminPanel = mountNode.querySelector("#adminPanel");
 
   const createCampaignForm = mountNode.querySelector("#createCampaignForm");
@@ -253,12 +254,13 @@ export async function renderDashboardPage(mountNode) {
   adminPanel.hidden = !canManageCampaigns;
   organizerProfileFields.hidden = !showOrganizerProfileFields;
   volunteerSkillsFields.hidden = !isVolunteer;
-  if (volunteerApplyTab) {
-    volunteerApplyTab.hidden = !isVolunteer;
+  if (volunteerMyCampaignsTab) {
+    volunteerMyCampaignsTab.hidden = !isVolunteer;
   }
 
   let allCampaigns = [];
   let joinedCampaignIds = new Set();
+  let volunteerCampaignIds = new Set();
   let organizerCampaigns = [];
   let volunteerDirectory = [];
   let selectedApplicationsCampaignId = null;
@@ -598,12 +600,14 @@ export async function renderDashboardPage(mountNode) {
   };
 
   const applyFilter = () => {
-    const predicate = getFilterPredicate(activeFilter);
-    const filteredCampaigns = allCampaigns.filter(predicate);
+    const predicate = getFilterPredicate(activeFilter, { volunteerCampaignIds });
+    const filteredCampaigns = allCampaigns
+      .filter(predicate)
+      .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
     renderCampaignList(filteredCampaigns, mountNode, {
       userType,
       isAdmin,
-      useApplicationLabels: activeFilter === "ongoing-apply",
+      useApplicationLabels: activeFilter === "ongoing" || activeFilter === "my-campaigns",
       joinedCampaignIds,
       onJoinCampaign: async (campaignId) => {
         const { error } = await joinCampaign(campaignId);
@@ -681,15 +685,31 @@ export async function renderDashboardPage(mountNode) {
       return;
     }
 
-    const joinedResult = await getJoinedCampaignIds();
+    const [joinedResult, participationResult] = await Promise.all([
+      getJoinedCampaignIds(),
+      getVolunteerParticipationCampaigns(),
+    ]);
+
     if (joinedResult.error) {
       dashboardError.hidden = false;
       dashboardError.textContent = joinedResult.error.message || "Unable to load your joined campaigns.";
       joinedCampaignIds = new Set();
+    } else {
+      joinedCampaignIds = new Set(joinedResult.data);
+    }
+
+    if (participationResult.error) {
+      dashboardError.hidden = false;
+      dashboardError.textContent =
+        participationResult.error.message || "Unable to load your campaign participation.";
+      volunteerCampaignIds = new Set(joinedCampaignIds);
       return;
     }
 
-    joinedCampaignIds = new Set(joinedResult.data);
+    volunteerCampaignIds = new Set((participationResult.data ?? []).map((campaign) => campaign.id));
+    for (const joinedId of joinedCampaignIds) {
+      volunteerCampaignIds.add(joinedId);
+    }
   };
 
   const loadOrganizerData = async () => {
