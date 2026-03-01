@@ -1,14 +1,17 @@
 import { renderDashboardPage } from "./pages/dashboard/dashboard.js";
 import { renderCampaignPage } from "./pages/campaign/campaign.js";
 import { renderIndexPage } from "./pages/index/index.js";
-import { renderRegisterPage } from "./pages/register/register.js";
-import { renderLoginPage } from "./pages/login/login.js";
+import { renderAuthPage } from "./pages/auth/auth.js";
 
 const routes = {
   "/": renderIndexPage,
   "/dashboard": renderDashboardPage,
-  "/register": renderRegisterPage,
-  "/login": renderLoginPage,
+  "/dashboard/admin": renderDashboardPage,
+  "/dashboard/organizer": renderDashboardPage,
+  "/dashboard/volunteer": renderDashboardPage,
+  "/auth": (mountNode) => renderAuthPage(mountNode, { defaultTab: "login" }),
+  "/login": (mountNode) => renderAuthPage(mountNode, { defaultTab: "login" }),
+  "/register": (mountNode) => renderAuthPage(mountNode, { defaultTab: "register" }),
 };
 
 function normalizePath(pathname) {

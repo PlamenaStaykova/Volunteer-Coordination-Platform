@@ -2,13 +2,13 @@ import "./campaign.css";
 import pageHtml from "./campaign.html?raw";
 import { renderHeader } from "../../components/header/header.js";
 import { renderFooter } from "../../components/footer/footer.js";
+import { requireAuth } from "../../lib/guards.js";
 import {
   assignVolunteerToCampaign,
   cancelCampaignApplication,
   deleteCampaign,
   getCampaignApplications,
   getCampaignById,
-  getCurrentUser,
   getIsAdmin,
   getJoinedCampaignIds,
   getUserType,
@@ -84,9 +84,8 @@ function toCampaignPayloadFromForm(formData) {
 }
 
 export async function renderCampaignPage(mountNode, params = {}) {
-  const user = await getCurrentUser();
+  const user = await requireAuth("/auth");
   if (!user) {
-    window.location.href = "/login";
     return;
   }
 

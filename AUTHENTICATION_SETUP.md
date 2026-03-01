@@ -45,16 +45,27 @@ The platform now includes user registration and login functionality powered by S
 
 7. **Visit the application**:
    - Open http://localhost:5173
-   - Click "Register" to create a new account
-   - Click "Log In" to log in with your credentials
+   - Use the unified auth page at `/auth` (single `Log In / Register` flow)
+   - In Register tab, choose role: `Organizer` or `Volunteer`
 
 ### Features
 
-- **Registration**: Users can create accounts with email and password
-- **Login**: Secure login using Supabase authentication
-- **Logout**: Users can log out from the header
-- **Protected Routes**: Redirects unauthenticated users appropriately
+- **Unified auth**: Single `Log In / Register` page for all users
+- **Role selection on register**: Organizer or Volunteer (Admin is not public-registerable)
+- **Single login form**: Admin/Organizer/Volunteer all log in from the same form
+- **Role-based redirect**: Admin -> Admin dashboard access, Organizer/Volunteer -> role-aware dashboard area
+- **Protected Routes**: Redirects unauthenticated users to `/auth`
 - **Responsive Design**: Works on desktop, tablet, and mobile devices
+
+### Admin bootstrap (recommended)
+
+Seed an initial admin via environment variables when running `supabase/seed.js`:
+
+```env
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=change_me_secure_password
+ADMIN_DISPLAY_NAME=Platform Admin
+```
 
 ### File Structure
 

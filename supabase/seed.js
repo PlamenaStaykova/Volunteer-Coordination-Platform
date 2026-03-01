@@ -17,6 +17,9 @@ dotenv.config();
 
 const url = process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const adminEmail = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+const adminPassword = process.env.ADMIN_PASSWORD || "";
+const adminDisplayName = (process.env.ADMIN_DISPLAY_NAME || "Platform Admin").trim();
 
 if (!url || !key) {
   console.error("Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables");
@@ -136,10 +139,45 @@ async function seed() {
           id: u.id,
           display_name: u.display_name,
           user_type: u.type,
+          auth_role: u.type,
         },
         { onConflict: "id" },
       );
     if (error) console.error("profile upsert error for", u.email, error);
+  }
+
+  if (adminEmail && adminPassword) {
+    console.log("ensuring bootstrap admin...");
+    const adminId = await getOrCreateUser({
+      email: adminEmail,
+      password: adminPassword,
+      display_name: adminDisplayName,
+      type: "volunteer",
+    });
+
+    if (adminId) {
+      const { error: adminProfileError } = await supabase
+        .from("profiles")
+        .upsert(
+          {
+            id: adminId,
+            display_name: adminDisplayName,
+            user_type: "volunteer",
+            auth_role: "admin",
+          },
+          { onConflict: "id" },
+        );
+      if (adminProfileError) {
+        console.error("admin profile upsert error", adminProfileError);
+      }
+
+      const { error: adminRoleError } = await supabase
+        .from("user_roles")
+        .upsert({ user_id: adminId, role: "admin" }, { onConflict: "user_id,role" });
+      if (adminRoleError) {
+        console.error("admin role upsert error", adminRoleError);
+      }
+    }
   }
 
   // ensure events for organizers in different statuses

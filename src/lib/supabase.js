@@ -227,10 +227,24 @@ function normalizeUserType(value) {
   return null;
 }
 
+function normalizeAuthRole(value) {
+  if (!value || typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "admin" || normalized === "organizer" || normalized === "volunteer") {
+    return normalized;
+  }
+
+  return null;
+}
+
 const profileSelectColumns = [
   "id",
   "display_name",
   "user_type",
+  "auth_role",
   "first_name",
   "last_name",
   "email",
@@ -239,6 +253,59 @@ const profileSelectColumns = [
   "campaign_manager",
   "volunteer_skills",
 ].join(", ");
+
+export function getDashboardPathForRole(role) {
+  const normalizedRole = normalizeAuthRole(role);
+  if (normalizedRole === "admin") {
+    return "/dashboard/admin";
+  }
+  if (normalizedRole === "organizer") {
+    return "/dashboard/organizer";
+  }
+  return "/dashboard/volunteer";
+}
+
+export async function getAuthRole(user = null) {
+  if (!supabase) {
+    return null;
+  }
+
+  const currentUser = user || (await getCurrentUser());
+  if (!currentUser) {
+    return null;
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("auth_role, user_type")
+    .eq("id", currentUser.id)
+    .maybeSingle();
+
+  if (!profileError) {
+    const profileRole = normalizeAuthRole(profile?.auth_role);
+    if (profileRole) {
+      return profileRole;
+    }
+  }
+
+  const metadataRole = normalizeAuthRole(
+    currentUser.user_metadata?.auth_role ||
+      currentUser.user_metadata?.user_type ||
+      currentUser.app_metadata?.auth_role ||
+      currentUser.app_metadata?.user_type
+  );
+  if (metadataRole) {
+    return metadataRole;
+  }
+
+  const isAdmin = await getIsAdmin(currentUser);
+  if (isAdmin) {
+    return "admin";
+  }
+
+  const userType = await getUserType(currentUser);
+  return userType === "organizer" ? "organizer" : "volunteer";
+}
 
 export async function getUserType(user = null) {
   if (!supabase) {
@@ -259,9 +326,14 @@ export async function getUserType(user = null) {
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("user_type, display_name")
+    .select("user_type, auth_role, display_name")
     .eq("id", currentUser.id)
     .maybeSingle();
+
+  if (!profileError && normalizeAuthRole(profile?.auth_role) === "admin") {
+    const metadataUserType = normalizeUserType(currentUser.user_metadata?.user_type || currentUser.app_metadata?.user_type);
+    return metadataUserType || "organizer";
+  }
 
   const profileRole = normalizeUserType(profile?.user_type);
   if (!profileError && profileRole) {
@@ -380,6 +452,16 @@ export async function getIsAdmin(user = null) {
   const currentUser = user || (await getCurrentUser());
   if (!currentUser) {
     return false;
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("auth_role")
+    .eq("id", currentUser.id)
+    .maybeSingle();
+
+  if (!profileError && normalizeAuthRole(profile?.auth_role) === "admin") {
+    return true;
   }
 
   const { count, error } = await supabase

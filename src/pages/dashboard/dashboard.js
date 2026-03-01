@@ -2,6 +2,7 @@ import "./dashboard.css";
 import pageHtml from "./dashboard.html?raw";
 import { renderHeader } from "../../components/header/header.js";
 import { renderFooter } from "../../components/footer/footer.js";
+import { requireAuth, requireRole } from "../../lib/guards.js";
 import {
   adminCreateUser,
   assignVolunteerToCampaign,
@@ -13,7 +14,6 @@ import {
   getAdminUsers,
   getCampaignApplications,
   getCampaignDashboardData,
-  getCurrentUser,
   getHomeGalleryImages,
   getIsAdmin,
   getJoinedCampaignIds,
@@ -205,9 +205,22 @@ function renderCampaignList(campaigns, mountNode, context) {
 }
 
 export async function renderDashboardPage(mountNode) {
-  const user = await getCurrentUser();
+  const normalizedPath = window.location.pathname.endsWith("/")
+    ? window.location.pathname.slice(0, -1)
+    : window.location.pathname;
+  let user = null;
+
+  if (normalizedPath === "/dashboard/admin") {
+    user = await requireRole("admin", "/dashboard");
+  } else if (normalizedPath === "/dashboard/organizer") {
+    user = await requireRole("organizer", "/dashboard");
+  } else if (normalizedPath === "/dashboard/volunteer") {
+    user = await requireRole("volunteer", "/dashboard");
+  } else {
+    user = await requireAuth("/auth");
+  }
+
   if (!user) {
-    window.location.href = "/login";
     return;
   }
 

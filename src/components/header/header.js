@@ -1,6 +1,6 @@
 import "./header.css";
 import headerHtml from "./header.html?raw";
-import { getCurrentUser, signOut } from "../../lib/supabase.js";
+import { getAuthRole, getCurrentUser, getDashboardPathForRole, signOut } from "../../lib/supabase.js";
 
 export async function renderHeader(activePage) {
   const wrapper = document.createElement("div");
@@ -13,12 +13,18 @@ export async function renderHeader(activePage) {
 
   // Check authentication status
   const user = await getCurrentUser();
+  const dashboardLink = wrapper.querySelector('[data-nav="dashboard"]');
   const authSection = wrapper.querySelector("#authSection");
   const noAuthSection = wrapper.querySelector("#noAuthSection");
   const userEmail = wrapper.querySelector("#userEmail");
   const logoutButton = wrapper.querySelector("#logoutButton");
 
   if (user && authSection && noAuthSection && userEmail && logoutButton) {
+    if (dashboardLink) {
+      const role = await getAuthRole(user);
+      dashboardLink.href = getDashboardPathForRole(role);
+    }
+
     // User is logged in
     authSection.classList.add("is-active");
     noAuthSection.classList.add("is-hidden");
