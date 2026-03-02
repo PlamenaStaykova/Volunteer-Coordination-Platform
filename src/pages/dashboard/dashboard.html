@@ -1,7 +1,7 @@
 <main class="page page-dashboard">
   <div class="container page-inner">
     <section class="dashboard-hero">
-      <h1>Campaign Dashboard</h1>
+      <h1 id="dashboardTitle">Campaign Dashboard</h1>
       <div class="dashboard-hero-actions">
         <a class="btn btn-neutral" href="/profile">My Profile</a>
         <a id="createCampaignHeroLink" class="btn" href="/campaign/new" hidden>Create Campaign</a>
@@ -24,7 +24,7 @@
       <p id="adminActionMessage" class="inline-message" hidden></p>
 
       <article class="admin-card admin-list-card">
-        <h3>My Campaigns</h3>
+        <h3 id="managedCampaignsTitle">My Campaigns</h3>
         <section id="organizerToolsFilters" class="dashboard-filters organizer-tools-filters" hidden>
           <div class="filter-tabs">
             <button class="filter-tab is-active" data-filter="total" type="button">Total Campaigns</button>
@@ -35,6 +35,48 @@
         </section>
         <ul id="organizerCampaignList" class="organizer-campaign-list"></ul>
         <p id="organizerCampaignEmpty" class="campaign-empty-state" hidden>No campaigns created yet.</p>
+      </article>
+
+      <article id="adminOversightCard" class="admin-card admin-list-card" hidden>
+        <h3>Platform Oversight</h3>
+        <p class="admin-hint">View organizer campaign ownership and volunteer participation across all campaigns.</p>
+        <p id="adminOversightMessage" class="inline-message" hidden></p>
+        <p id="adminOversightLoading" class="admin-hint" hidden>Loading overview...</p>
+
+        <section class="admin-table-section">
+          <h4>Organizers</h4>
+          <div class="admin-table-wrap">
+            <table class="admin-data-table">
+              <thead>
+                <tr>
+                  <th scope="col">Organizer</th>
+                  <th scope="col">Campaigns Created</th>
+                  <th scope="col">Campaign Titles + Skills</th>
+                </tr>
+              </thead>
+              <tbody id="adminOrganizersBody"></tbody>
+            </table>
+          </div>
+          <p id="adminOrganizersEmpty" class="campaign-empty-state" hidden>No organizers found.</p>
+        </section>
+
+        <section class="admin-table-section">
+          <h4>Volunteers</h4>
+          <div class="admin-table-wrap">
+            <table class="admin-data-table">
+              <thead>
+                <tr>
+                  <th scope="col">Volunteer</th>
+                  <th scope="col">Volunteer Skills</th>
+                  <th scope="col">Campaigns Participating</th>
+                  <th scope="col">Campaign Titles + Skills</th>
+                </tr>
+              </thead>
+              <tbody id="adminVolunteersBody"></tbody>
+            </table>
+          </div>
+          <p id="adminVolunteersEmpty" class="campaign-empty-state" hidden>No volunteers found.</p>
+        </section>
       </article>
 
       <article id="adminGalleryCard" class="admin-card admin-list-card" hidden>
@@ -61,6 +103,12 @@
 
       <article id="adminUsersCard" class="admin-card admin-list-card" hidden>
         <h3>User Management</h3>
+        <section class="dashboard-filters admin-user-filters" aria-label="User role filters">
+          <div class="filter-tabs">
+            <button class="filter-tab is-active" data-user-filter="organizer" type="button">Organizers</button>
+            <button class="filter-tab" data-user-filter="volunteer" type="button">Volunteers</button>
+          </div>
+        </section>
         <form id="adminCreateUserForm" class="admin-form compact-admin-form">
           <label>
             Email

@@ -522,6 +522,21 @@ export async function getAdminUsers() {
   return { data: data ?? [], error };
 }
 
+export async function getAdminDashboardOverview() {
+  if (!supabase) {
+    return { data: { organizers: [], volunteers: [] }, error: new Error(missingConfigMessage) };
+  }
+
+  const { data, error } = await supabase.rpc("admin_get_dashboard_overview");
+  if (error) {
+    return { data: { organizers: [], volunteers: [] }, error };
+  }
+
+  const organizers = Array.isArray(data?.organizers) ? data.organizers : [];
+  const volunteers = Array.isArray(data?.volunteers) ? data.volunteers : [];
+  return { data: { organizers, volunteers }, error: null };
+}
+
 export async function updateAdminUser(userPayload) {
   if (!supabase) {
     return { error: new Error(missingConfigMessage) };
@@ -535,6 +550,7 @@ export async function updateAdminUser(userPayload) {
     p_phone: userPayload.phone || null,
     p_user_type: userPayload.user_type || "volunteer",
     p_is_admin: Boolean(userPayload.is_admin),
+    p_volunteer_skills: Array.isArray(userPayload.volunteer_skills) ? userPayload.volunteer_skills : [],
   };
 
   const { error } = await supabase.rpc("admin_update_user", params);
@@ -596,7 +612,7 @@ export async function adminCreateUser(email, password, role = "volunteer", displ
   return { data, error: null };
 }
 
-export async function getOrganizerCampaigns() {
+export async function getOrganizerCampaigns(options = {}) {
   if (!supabase) {
     return { data: [], error: new Error(missingConfigMessage) };
   }
@@ -606,16 +622,23 @@ export async function getOrganizerCampaigns() {
     return { data: [], error: new Error("User not authenticated.") };
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("events")
-    .select("id, title, description, location, start_at, end_at, status, required_skills, created_at")
-    .eq("created_by", user.id)
+    .select("id, title, description, location, start_at, end_at, status, required_skills, created_by, created_at")
     .order("created_at", { ascending: false });
+
+  const includeAll = Boolean(options?.includeAll);
+  const isAdmin = await getIsAdmin(user);
+  if (!includeAll || !isAdmin) {
+    query = query.eq("created_by", user.id);
+  }
+
+  const { data, error } = await query;
 
   return { data: data ?? [], error };
 }
 
-export async function getOrganizerCampaignSignupSummary() {
+export async function getOrganizerCampaignSignupSummary(options = {}) {
   if (!supabase) {
     return { data: [], error: new Error(missingConfigMessage) };
   }
@@ -625,10 +648,14 @@ export async function getOrganizerCampaignSignupSummary() {
     return { data: [], error: new Error("User not authenticated.") };
   }
 
-  const { data: events, error: eventsError } = await supabase
-    .from("events")
-    .select("id")
-    .eq("created_by", user.id);
+  let eventsQuery = supabase.from("events").select("id");
+  const includeAll = Boolean(options?.includeAll);
+  const isAdmin = await getIsAdmin(user);
+  if (!includeAll || !isAdmin) {
+    eventsQuery = eventsQuery.eq("created_by", user.id);
+  }
+
+  const { data: events, error: eventsError } = await eventsQuery;
 
   if (eventsError) {
     return { data: [], error: eventsError };

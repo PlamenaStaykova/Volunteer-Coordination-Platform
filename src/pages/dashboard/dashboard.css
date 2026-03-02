@@ -304,6 +304,40 @@
   font-family: inherit;
 }
 
+.user-admin-edit .full-width {
+  grid-column: 1 / -1;
+}
+
+.admin-skill-editor {
+  border: 1px solid #dce3eb;
+  border-radius: 8px;
+  background: #fbfdff;
+  padding: 0.55rem 0.65rem;
+}
+
+.admin-skill-editor p {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #1c3b63;
+}
+
+.admin-skill-grid {
+  margin-top: 0.45rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem 0.7rem;
+}
+
+.admin-skill-option {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: #20354d;
+}
+
 .item-actions {
   margin-top: 0.6rem;
   display: flex;
@@ -338,6 +372,81 @@
 .admin-hint {
   margin: 0.7rem 0 0;
   color: #30445c;
+}
+
+.admin-table-section {
+  margin-top: 1rem;
+}
+
+.admin-table-section h4 {
+  margin: 0;
+}
+
+.admin-table-wrap {
+  margin-top: 0.6rem;
+  overflow-x: auto;
+}
+
+.admin-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 680px;
+}
+
+.admin-data-table th,
+.admin-data-table td {
+  text-align: left;
+  vertical-align: top;
+  border: 1px solid #dce3eb;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.9rem;
+}
+
+.admin-data-table thead th {
+  background: #f6f9ff;
+  color: #1c3b63;
+  font-weight: 700;
+}
+
+.admin-person-label strong {
+  display: block;
+}
+
+.admin-person-label span {
+  display: block;
+  color: #5a6d83;
+  margin-top: 0.1rem;
+}
+
+.admin-skills-cell {
+  color: #30445c;
+  font-size: 0.86rem;
+}
+
+.admin-campaign-links {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.admin-campaign-entry {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.admin-campaign-link {
+  color: #1c3b63;
+  text-decoration: underline;
+  text-decoration-color: #aac2e6;
+  font-size: 0.87rem;
+}
+
+.admin-campaign-skill-line {
+  color: #5a6d83;
+  font-size: 0.81rem;
+}
+
+.admin-expand-btn {
+  margin-top: 0.45rem;
 }
 
 .compact-admin-form {
@@ -574,6 +683,14 @@
 
   .user-admin-edit {
     grid-template-columns: 1fr;
+  }
+
+  .admin-skill-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-data-table {
+    min-width: 560px;
   }
 
   .campaign-header {

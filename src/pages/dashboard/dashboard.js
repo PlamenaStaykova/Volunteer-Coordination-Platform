@@ -4,6 +4,7 @@ import { renderHeader } from "../../components/header/header.js";
 import { renderFooter } from "../../components/footer/footer.js";
 import { requireAuth, requireRole } from "../../lib/guards.js";
 import {
+  getAdminDashboardOverview,
   adminCreateUser,
   deleteAdminUser,
   deleteCampaign,
@@ -114,6 +115,93 @@ function getFilterPredicate(filter, context = {}) {
 
 function toFilterCountLabel(baseLabel, count) {
   return `${baseLabel} (${count})`;
+}
+
+function normalizeSkillList(skills = []) {
+  const unique = new Set();
+  for (const skill of Array.isArray(skills) ? skills : []) {
+    const normalized = String(skill || "").trim();
+    if (normalized) {
+      unique.add(normalized);
+    }
+  }
+  return [...unique];
+}
+
+function formatSkillsText(skills = [], fallback = "No specific skills set.") {
+  const normalized = normalizeSkillList(skills);
+  return normalized.length > 0 ? normalized.join(", ") : fallback;
+}
+
+function createAdminSkillsCell(skills = [], fallback = "No skills set.") {
+  const cell = document.createElement("td");
+  cell.className = "admin-skills-cell";
+  cell.textContent = formatSkillsText(skills, fallback);
+  return cell;
+}
+
+function createAdminCampaignLinksCell(campaigns = []) {
+  const cell = document.createElement("td");
+  if (!Array.isArray(campaigns) || campaigns.length === 0) {
+    cell.textContent = "-";
+    return cell;
+  }
+
+  const linksWrap = document.createElement("div");
+  linksWrap.className = "admin-campaign-links";
+  cell.append(linksWrap);
+
+  let expanded = false;
+  const maxCollapsed = 3;
+  const toggleButton = document.createElement("button");
+  toggleButton.type = "button";
+  toggleButton.className = "btn btn-small btn-neutral admin-expand-btn";
+
+  const renderLinks = () => {
+    linksWrap.innerHTML = "";
+    const visible = expanded ? campaigns : campaigns.slice(0, maxCollapsed);
+    for (const campaign of visible) {
+      const row = document.createElement("div");
+      row.className = "admin-campaign-entry";
+      const campaignTitle = String(campaign?.title || "Untitled campaign");
+      if (campaign?.id) {
+        const link = document.createElement("a");
+        link.className = "admin-campaign-link";
+        link.href = `/campaign/${campaign.id}`;
+        link.textContent = campaignTitle;
+        row.append(link);
+      } else {
+        const text = document.createElement("span");
+        text.textContent = campaignTitle;
+        row.append(text);
+      }
+
+      const skillsHint = document.createElement("span");
+      skillsHint.className = "admin-campaign-skill-line";
+      skillsHint.textContent = `Skills: ${formatSkillsText(
+        campaign?.requiredSkills ?? campaign?.required_skills ?? [],
+        "No specific skills required."
+      )}`;
+      row.append(skillsHint);
+
+      linksWrap.append(row);
+    }
+  };
+
+  renderLinks();
+
+  if (campaigns.length > maxCollapsed) {
+    const hiddenCount = campaigns.length - maxCollapsed;
+    toggleButton.textContent = `+${hiddenCount} more`;
+    toggleButton.addEventListener("click", () => {
+      expanded = !expanded;
+      toggleButton.textContent = expanded ? "Show less" : `+${hiddenCount} more`;
+      renderLinks();
+    });
+    cell.append(toggleButton);
+  }
+
+  return cell;
 }
 
 function setInlineMessage(element, message, type = "error") {
@@ -268,6 +356,7 @@ export async function renderDashboardPage(mountNode) {
   pageContainer.innerHTML = pageHtml;
   mountNode.append(pageContainer.firstElementChild);
 
+  const dashboardTitle = mountNode.querySelector("#dashboardTitle");
   const dashboardError = mountNode.querySelector("#dashboardError");
   const dashboardFiltersSection = mountNode.querySelector(".dashboard-filters");
   const campaignListSection = mountNode.querySelector(".campaign-list-section");
@@ -278,8 +367,16 @@ export async function renderDashboardPage(mountNode) {
   const organizerToolsFilters = mountNode.querySelector("#organizerToolsFilters");
 
   const adminActionMessage = mountNode.querySelector("#adminActionMessage");
+  const managedCampaignsTitle = mountNode.querySelector("#managedCampaignsTitle");
   const organizerCampaignList = mountNode.querySelector("#organizerCampaignList");
   const organizerCampaignEmpty = mountNode.querySelector("#organizerCampaignEmpty");
+  const adminOversightCard = mountNode.querySelector("#adminOversightCard");
+  const adminOversightMessage = mountNode.querySelector("#adminOversightMessage");
+  const adminOversightLoading = mountNode.querySelector("#adminOversightLoading");
+  const adminOrganizersBody = mountNode.querySelector("#adminOrganizersBody");
+  const adminOrganizersEmpty = mountNode.querySelector("#adminOrganizersEmpty");
+  const adminVolunteersBody = mountNode.querySelector("#adminVolunteersBody");
+  const adminVolunteersEmpty = mountNode.querySelector("#adminVolunteersEmpty");
   const adminGalleryCard = mountNode.querySelector("#adminGalleryCard");
   const galleryUploadForm = mountNode.querySelector("#galleryUploadForm");
   const galleryTitle = mountNode.querySelector("#galleryTitle");
@@ -289,6 +386,7 @@ export async function renderDashboardPage(mountNode) {
   const adminGalleryList = mountNode.querySelector("#adminGalleryList");
   const adminGalleryEmpty = mountNode.querySelector("#adminGalleryEmpty");
   const adminUsersCard = mountNode.querySelector("#adminUsersCard");
+  const adminUserFilterTabs = [...mountNode.querySelectorAll("[data-user-filter]")];
   const adminCreateUserForm = mountNode.querySelector("#adminCreateUserForm");
   const newUserEmail = mountNode.querySelector("#newUserEmail");
   const newUserPassword = mountNode.querySelector("#newUserPassword");
@@ -302,6 +400,9 @@ export async function renderDashboardPage(mountNode) {
   const canManageCampaigns = userType === "organizer" || isAdmin;
   const isVolunteer = userType === "volunteer" && !isAdmin;
 
+  if (dashboardTitle) {
+    dashboardTitle.textContent = isAdmin ? "Admin Dashboard" : "Campaign Dashboard";
+  }
   adminPanel.hidden = !canManageCampaigns;
   if (dashboardFiltersSection) {
     dashboardFiltersSection.hidden = canManageCampaigns;
@@ -324,14 +425,22 @@ export async function renderDashboardPage(mountNode) {
   if (adminUsersCard) {
     adminUsersCard.hidden = !isAdmin;
   }
+  if (adminOversightCard) {
+    adminOversightCard.hidden = !isAdmin;
+  }
+  if (managedCampaignsTitle) {
+    managedCampaignsTitle.textContent = isAdmin ? "All Campaigns" : "My Campaigns";
+  }
 
   let allCampaigns = [];
   let joinedCampaignIds = new Set();
   let volunteerCampaignIds = new Set();
   let organizerCampaigns = [];
+  let adminOverview = { organizers: [], volunteers: [] };
   let adminUsers = [];
   let homeGalleryImages = [];
   let activeFilter = "total";
+  let adminUserFilter = "organizer";
   const filterTabsByFilter = new Map();
 
   for (const tab of filterTabs) {
@@ -354,6 +463,71 @@ export async function renderDashboardPage(mountNode) {
       }
     }
     return [...unique];
+  };
+
+  const renderAdminOversight = () => {
+    if (
+      !isAdmin ||
+      !adminOrganizersBody ||
+      !adminVolunteersBody ||
+      !adminOrganizersEmpty ||
+      !adminVolunteersEmpty
+    ) {
+      return;
+    }
+
+    adminOrganizersBody.innerHTML = "";
+    adminVolunteersBody.innerHTML = "";
+
+    const organizers = Array.isArray(adminOverview.organizers) ? adminOverview.organizers : [];
+    const volunteers = Array.isArray(adminOverview.volunteers) ? adminOverview.volunteers : [];
+
+    adminOrganizersEmpty.hidden = organizers.length !== 0;
+    adminVolunteersEmpty.hidden = volunteers.length !== 0;
+
+    for (const organizer of organizers) {
+      const campaignsCreated = Array.isArray(organizer?.campaignsCreated) ? organizer.campaignsCreated : [];
+      const row = document.createElement("tr");
+
+      const personCell = document.createElement("td");
+      personCell.className = "admin-person-label";
+      personCell.innerHTML = `
+        <strong>${organizer?.name || "Unknown Organizer"}</strong>
+        <span>${organizer?.email || "-"}</span>
+      `;
+
+      const countCell = document.createElement("td");
+      countCell.textContent = String(campaignsCreated.length);
+
+      row.append(personCell, countCell, createAdminCampaignLinksCell(campaignsCreated));
+      adminOrganizersBody.append(row);
+    }
+
+    for (const volunteer of volunteers) {
+      const campaignsParticipating = Array.isArray(volunteer?.campaignsParticipating)
+        ? volunteer.campaignsParticipating
+        : [];
+      const volunteerSkills = Array.isArray(volunteer?.volunteerSkills) ? volunteer.volunteerSkills : [];
+      const row = document.createElement("tr");
+
+      const personCell = document.createElement("td");
+      personCell.className = "admin-person-label";
+      personCell.innerHTML = `
+        <strong>${volunteer?.name || "Unknown Volunteer"}</strong>
+        <span>${volunteer?.email || "-"}</span>
+      `;
+
+      const countCell = document.createElement("td");
+      countCell.textContent = String(campaignsParticipating.length);
+
+      row.append(
+        personCell,
+        createAdminSkillsCell(volunteerSkills, "No volunteer skills listed."),
+        countCell,
+        createAdminCampaignLinksCell(campaignsParticipating)
+      );
+      adminVolunteersBody.append(row);
+    }
   };
 
   const setFilterCounter = (filterKey, count) => {
@@ -448,12 +622,35 @@ export async function renderDashboardPage(mountNode) {
       return;
     }
 
-    adminUserList.innerHTML = "";
-    adminUserEmpty.hidden = adminUsers.length !== 0;
+    const visibleAdminUsers = adminUsers.filter((adminUser) => {
+      if (adminUserFilter === "organizer") {
+        return adminUser.user_type === "organizer";
+      }
+      if (adminUserFilter === "volunteer") {
+        return adminUser.user_type === "volunteer";
+      }
+      return true;
+    });
 
-    for (const adminUser of adminUsers) {
+    adminUserList.innerHTML = "";
+    adminUserEmpty.hidden = visibleAdminUsers.length !== 0;
+    adminUserEmpty.textContent =
+      adminUserFilter === "organizer" ? "No organizers found." : "No volunteers found.";
+
+    for (const adminUser of visibleAdminUsers) {
       const item = document.createElement("li");
       item.className = "user-admin-item";
+      const normalizedUserSkills = normalizeVolunteerSkills(adminUser.volunteer_skills || []);
+      const volunteerSkillsOptions = VOLUNTEER_SKILLS.map(
+        (skill) => `
+          <label class="admin-skill-option">
+            <input data-field="volunteer_skills" type="checkbox" value="${skill}" ${
+              normalizedUserSkills.includes(skill) ? "checked" : ""
+            } />
+            <span>${skill}</span>
+          </label>
+        `
+      ).join("");
 
       item.innerHTML = `
         <div class="user-admin-main">
@@ -492,8 +689,27 @@ export async function renderDashboardPage(mountNode) {
               <option value="true" ${adminUser.is_admin ? "selected" : ""}>Yes</option>
             </select>
           </label>
+          <div data-field="volunteer_skills_editor" class="admin-skill-editor full-width" ${
+            adminUser.user_type === "volunteer" ? "" : "hidden"
+          }>
+            <p>Volunteer Skills</p>
+            <div class="admin-skill-grid">
+              ${volunteerSkillsOptions}
+            </div>
+          </div>
         </div>
       `;
+
+      const selectedRoleInput = item.querySelector('[data-field="user_type"]');
+      const volunteerSkillsEditor = item.querySelector('[data-field="volunteer_skills_editor"]');
+      const toggleVolunteerSkillsEditor = () => {
+        if (!selectedRoleInput || !volunteerSkillsEditor) {
+          return;
+        }
+        volunteerSkillsEditor.hidden = selectedRoleInput.value !== "volunteer";
+      };
+      selectedRoleInput?.addEventListener("change", toggleVolunteerSkillsEditor);
+      toggleVolunteerSkillsEditor();
 
       const actions = document.createElement("div");
       actions.className = "item-actions";
@@ -509,6 +725,9 @@ export async function renderDashboardPage(mountNode) {
         const phone = item.querySelector('[data-field="phone"]').value;
         const selectedRole = item.querySelector('[data-field="user_type"]').value;
         const selectedIsAdmin = item.querySelector('[data-field="is_admin"]').value === "true";
+        const volunteerSkills = normalizeVolunteerSkills(
+          [...item.querySelectorAll('input[data-field="volunteer_skills"]:checked')].map((input) => input.value)
+        );
 
         const { error } = await updateAdminUser({
           user_id: adminUser.user_id,
@@ -518,6 +737,7 @@ export async function renderDashboardPage(mountNode) {
           phone,
           user_type: selectedRole,
           is_admin: selectedIsAdmin,
+          volunteer_skills: volunteerSkills,
         });
 
         if (error) {
@@ -591,6 +811,34 @@ export async function renderDashboardPage(mountNode) {
     renderAdminUsers();
   };
 
+  const loadAdminOverviewData = async () => {
+    if (!isAdmin) {
+      return;
+    }
+
+    if (adminOversightLoading) {
+      adminOversightLoading.hidden = false;
+    }
+    setInlineMessage(adminOversightMessage, "");
+
+    const { data, error } = await getAdminDashboardOverview();
+    if (error) {
+      adminOverview = { organizers: [], volunteers: [] };
+      setInlineMessage(adminOversightMessage, error.message || "Unable to load admin overview.");
+    } else {
+      adminOverview = {
+        organizers: data?.organizers ?? [],
+        volunteers: data?.volunteers ?? [],
+      };
+      setInlineMessage(adminOversightMessage, "", "success");
+    }
+
+    if (adminOversightLoading) {
+      adminOversightLoading.hidden = true;
+    }
+    renderAdminOversight();
+  };
+
   const renderOrganizerCampaigns = () => {
     organizerCampaignList.innerHTML = "";
     const filteredOrganizerCampaigns = organizerCampaigns
@@ -621,6 +869,16 @@ export async function renderDashboardPage(mountNode) {
       item.className = "organizer-campaign-item";
       const statusMeta = getEventStatusMeta(campaign.status);
       const requiredSkills = normalizeVolunteerSkills(campaign.required_skills || []);
+      const requiredSkillsEditorOptions = VOLUNTEER_SKILLS.map(
+        (skill) => `
+          <label class="admin-skill-option">
+            <input name="requiredSkills" type="checkbox" value="${skill}" ${
+              requiredSkills.includes(skill) ? "checked" : ""
+            } />
+            <span>${skill}</span>
+          </label>
+        `
+      ).join("");
       const requiredSkillsSummary =
         requiredSkills.length > 0
           ? requiredSkills.join(", ")
@@ -666,6 +924,12 @@ export async function renderDashboardPage(mountNode) {
               End
               <input name="endAt" type="date" value="${toDateInputValue(campaign.end_at)}" required />
             </label>
+            <div class="admin-skill-editor full-width">
+              <p>Required Skills</p>
+              <div class="admin-skill-grid">
+                ${requiredSkillsEditorOptions}
+              </div>
+            </div>
           </div>
           <div class="item-actions">
             <button type="submit" class="btn btn-small">Save</button>
@@ -697,11 +961,15 @@ export async function renderDashboardPage(mountNode) {
           endAt: String(formData.get("endAt") || ""),
           capacity: String(formData.get("capacity") || ""),
         });
+        const selectedRequiredSkills = normalizeVolunteerSkills(
+          [...inlineEditForm.querySelectorAll('input[name="requiredSkills"]:checked')].map((input) => input.value)
+        );
 
         if (!payload || payload.capacity <= 0 || payload.end_at <= payload.start_at) {
           setInlineMessage(adminActionMessage, "Provide valid dates and capacity.", "error");
           return;
         }
+        payload.required_skills = selectedRequiredSkills;
 
         const { error } = await updateCampaignWithShift(campaign.id, payload);
         if (error) {
@@ -883,9 +1151,9 @@ export async function renderDashboardPage(mountNode) {
     }
 
     const [campaignsResult, dashboardResult, signupSummaryResult] = await Promise.all([
-      getOrganizerCampaigns(),
+      getOrganizerCampaigns({ includeAll: isAdmin }),
       getCampaignDashboardData(),
-      getOrganizerCampaignSignupSummary(),
+      getOrganizerCampaignSignupSummary({ includeAll: isAdmin }),
     ]);
 
     if (campaignsResult.error) {
@@ -912,6 +1180,9 @@ export async function renderDashboardPage(mountNode) {
     }
 
     updateFilterCounters();
+    if (isAdmin) {
+      await loadAdminOverviewData();
+    }
     renderOrganizerCampaigns();
   };
 
@@ -924,6 +1195,15 @@ export async function renderDashboardPage(mountNode) {
         renderOrganizerCampaigns();
       }
       applyFilter();
+    });
+  });
+
+  adminUserFilterTabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      adminUserFilter = tab.dataset.userFilter === "volunteer" ? "volunteer" : "organizer";
+      adminUserFilterTabs.forEach((otherTab) => otherTab.classList.remove("is-active"));
+      tab.classList.add("is-active");
+      renderAdminUsers();
     });
   });
 

@@ -23,6 +23,7 @@ export async function renderHeader(activePage) {
     if (dashboardLink) {
       const role = await getAuthRole(user);
       dashboardLink.href = getDashboardPathForRole(role);
+      dashboardLink.textContent = role === "admin" ? "Admin Dashboard" : "Dashboard";
     }
 
     // User is logged in
