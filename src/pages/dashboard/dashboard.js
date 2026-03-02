@@ -113,6 +113,16 @@ function getFilterPredicate(filter, context = {}) {
   return () => true;
 }
 
+function getCampaignStatusMessage(state) {
+  if (state === "paused") {
+    return "Campaign is paused.";
+  }
+  if (state === "done") {
+    return "This campaign has ended.";
+  }
+  return "Campaign is open.";
+}
+
 function toFilterCountLabel(baseLabel, count) {
   return `${baseLabel} (${count})`;
 }
@@ -295,6 +305,7 @@ function renderCampaignList(campaigns, mountNode, context) {
     item.className = "campaign-item";
 
     const statusMeta = getCampaignStateMeta(campaign.state);
+    const statusMessage = getCampaignStatusMessage(campaign.state);
     item.innerHTML = `
       <article class="campaign-card">
         <header class="campaign-header">
@@ -309,6 +320,7 @@ function renderCampaignList(campaigns, mountNode, context) {
           <span><strong>Max Volunteers:</strong> ${campaign.max_volunteers}</span>
           <span><strong>Vacancies:</strong> ${campaign.vacancies}</span>
         </div>
+        <p class="campaign-status-note">${statusMessage}</p>
       </article>
     `;
 
@@ -343,12 +355,7 @@ function renderCampaignList(campaigns, mountNode, context) {
           });
           actions.append(joinButton);
         }
-      } else if (hasJoined) {
-        const note = document.createElement("span");
-        note.textContent = campaign.state === "paused" ? "Campaign is paused." : "You joined this campaign.";
-        actions.append(note);
       }
-
       if (actions.children.length > 0) {
         item.querySelector(".campaign-card").append(actions);
       }
@@ -689,12 +696,15 @@ export async function renderDashboardPage(mountNode) {
     }
 
     const normalizedSearch = normalizeSearchQuery(searchQuery);
+    const searchAcrossAllRoles = Boolean(normalizedSearch);
     const visibleAdminUsers = adminUsers.filter((adminUser) => {
-      if (adminUserFilter === "organizer" && adminUser.user_type !== "organizer") {
-        return false;
-      }
-      if (adminUserFilter === "volunteer" && adminUser.user_type !== "volunteer") {
-        return false;
+      if (!searchAcrossAllRoles) {
+        if (adminUserFilter === "organizer" && adminUser.user_type !== "organizer") {
+          return false;
+        }
+        if (adminUserFilter === "volunteer" && adminUser.user_type !== "volunteer") {
+          return false;
+        }
       }
 
       if (!normalizedSearch) {
@@ -716,8 +726,7 @@ export async function renderDashboardPage(mountNode) {
     adminUserList.innerHTML = "";
     adminUserEmpty.hidden = visibleAdminUsers.length !== 0;
     if (normalizedSearch) {
-      adminUserEmpty.textContent =
-        adminUserFilter === "organizer" ? "No organizers match your search." : "No volunteers match your search.";
+      adminUserEmpty.textContent = "No users match your search.";
     } else {
       adminUserEmpty.textContent = adminUserFilter === "organizer" ? "No organizers found." : "No volunteers found.";
     }

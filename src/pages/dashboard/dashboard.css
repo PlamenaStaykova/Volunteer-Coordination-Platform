@@ -650,6 +650,12 @@
   gap: 1rem;
 }
 
+.campaign-status-note {
+  margin: 0.6rem 0 0;
+  color: #30445c;
+  font-size: 0.9rem;
+}
+
 .campaign-actions {
   margin-top: 0.9rem;
   display: flex;
