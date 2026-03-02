@@ -117,6 +117,17 @@ function toFilterCountLabel(baseLabel, count) {
   return `${baseLabel} (${count})`;
 }
 
+function normalizeSearchQuery(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function matchesSearch(value, query) {
+  if (!query) {
+    return true;
+  }
+  return String(value || "").toLowerCase().includes(query);
+}
+
 function normalizeSkillList(skills = []) {
   const unique = new Set();
   for (const skill of Array.isArray(skills) ? skills : []) {
@@ -131,6 +142,22 @@ function normalizeSkillList(skills = []) {
 function formatSkillsText(skills = [], fallback = "No specific skills set.") {
   const normalized = normalizeSkillList(skills);
   return normalized.length > 0 ? normalized.join(", ") : fallback;
+}
+
+function campaignMatchesSearch(campaign, query) {
+  if (!query) {
+    return true;
+  }
+
+  return [
+    campaign?.title,
+    campaign?.description,
+    campaign?.location,
+    campaign?.organization,
+    campaign?.status,
+    campaign?.state,
+    formatSkillsText(campaign?.required_skills ?? campaign?.requiredSkills ?? [], ""),
+  ].some((value) => matchesSearch(value, query));
 }
 
 function createAdminSkillsCell(skills = [], fallback = "No skills set.") {
@@ -250,9 +277,12 @@ function renderCampaignList(campaigns, mountNode, context) {
   const campaignEmptyState = mountNode.querySelector("#campaignEmptyState");
 
   campaignList.innerHTML = "";
+  const normalizedSearch = normalizeSearchQuery(context.searchQuery || "");
 
   if (campaigns.length === 0) {
-    campaignEmptyState.textContent = getEmptyStateMessage(context.activeFilter);
+    campaignEmptyState.textContent = normalizedSearch
+      ? "No campaigns match your search."
+      : getEmptyStateMessage(context.activeFilter);
     campaignEmptyState.hidden = false;
     return;
   }
@@ -357,6 +387,7 @@ export async function renderDashboardPage(mountNode) {
   mountNode.append(pageContainer.firstElementChild);
 
   const dashboardTitle = mountNode.querySelector("#dashboardTitle");
+  const dashboardSearchInput = mountNode.querySelector("#dashboardSearchInput");
   const dashboardError = mountNode.querySelector("#dashboardError");
   const dashboardFiltersSection = mountNode.querySelector(".dashboard-filters");
   const campaignListSection = mountNode.querySelector(".campaign-list-section");
@@ -441,6 +472,7 @@ export async function renderDashboardPage(mountNode) {
   let homeGalleryImages = [];
   let activeFilter = "total";
   let adminUserFilter = "organizer";
+  let searchQuery = "";
   const filterTabsByFilter = new Map();
 
   for (const tab of filterTabs) {
@@ -479,11 +511,45 @@ export async function renderDashboardPage(mountNode) {
     adminOrganizersBody.innerHTML = "";
     adminVolunteersBody.innerHTML = "";
 
-    const organizers = Array.isArray(adminOverview.organizers) ? adminOverview.organizers : [];
-    const volunteers = Array.isArray(adminOverview.volunteers) ? adminOverview.volunteers : [];
+    const normalizedSearch = normalizeSearchQuery(searchQuery);
+    const organizers = (Array.isArray(adminOverview.organizers) ? adminOverview.organizers : []).filter((organizer) => {
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      const organizerMatches =
+        matchesSearch(organizer?.name, normalizedSearch) || matchesSearch(organizer?.email, normalizedSearch);
+      if (organizerMatches) {
+        return true;
+      }
+
+      const campaignsCreated = Array.isArray(organizer?.campaignsCreated) ? organizer.campaignsCreated : [];
+      return campaignsCreated.some((campaign) => campaignMatchesSearch(campaign, normalizedSearch));
+    });
+    const volunteers = (Array.isArray(adminOverview.volunteers) ? adminOverview.volunteers : []).filter((volunteer) => {
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      const volunteerSkillsText = formatSkillsText(volunteer?.volunteerSkills ?? [], "");
+      const volunteerMatches =
+        matchesSearch(volunteer?.name, normalizedSearch) ||
+        matchesSearch(volunteer?.email, normalizedSearch) ||
+        matchesSearch(volunteerSkillsText, normalizedSearch);
+      if (volunteerMatches) {
+        return true;
+      }
+
+      const campaignsParticipating = Array.isArray(volunteer?.campaignsParticipating)
+        ? volunteer.campaignsParticipating
+        : [];
+      return campaignsParticipating.some((campaign) => campaignMatchesSearch(campaign, normalizedSearch));
+    });
 
     adminOrganizersEmpty.hidden = organizers.length !== 0;
     adminVolunteersEmpty.hidden = volunteers.length !== 0;
+    adminOrganizersEmpty.textContent = normalizedSearch ? "No organizers match your search." : "No organizers found.";
+    adminVolunteersEmpty.textContent = normalizedSearch ? "No volunteers match your search." : "No volunteers found.";
 
     for (const organizer of organizers) {
       const campaignsCreated = Array.isArray(organizer?.campaignsCreated) ? organizer.campaignsCreated : [];
@@ -622,20 +688,39 @@ export async function renderDashboardPage(mountNode) {
       return;
     }
 
+    const normalizedSearch = normalizeSearchQuery(searchQuery);
     const visibleAdminUsers = adminUsers.filter((adminUser) => {
-      if (adminUserFilter === "organizer") {
-        return adminUser.user_type === "organizer";
+      if (adminUserFilter === "organizer" && adminUser.user_type !== "organizer") {
+        return false;
       }
-      if (adminUserFilter === "volunteer") {
-        return adminUser.user_type === "volunteer";
+      if (adminUserFilter === "volunteer" && adminUser.user_type !== "volunteer") {
+        return false;
       }
-      return true;
+
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      const volunteerSkillsText = formatSkillsText(adminUser.volunteer_skills || [], "");
+      return [
+        adminUser.email,
+        adminUser.display_name,
+        adminUser.first_name,
+        adminUser.last_name,
+        adminUser.phone,
+        adminUser.user_type,
+        volunteerSkillsText,
+      ].some((value) => matchesSearch(value, normalizedSearch));
     });
 
     adminUserList.innerHTML = "";
     adminUserEmpty.hidden = visibleAdminUsers.length !== 0;
-    adminUserEmpty.textContent =
-      adminUserFilter === "organizer" ? "No organizers found." : "No volunteers found.";
+    if (normalizedSearch) {
+      adminUserEmpty.textContent =
+        adminUserFilter === "organizer" ? "No organizers match your search." : "No volunteers match your search.";
+    } else {
+      adminUserEmpty.textContent = adminUserFilter === "organizer" ? "No organizers found." : "No volunteers found.";
+    }
 
     for (const adminUser of visibleAdminUsers) {
       const item = document.createElement("li");
@@ -841,6 +926,7 @@ export async function renderDashboardPage(mountNode) {
 
   const renderOrganizerCampaigns = () => {
     organizerCampaignList.innerHTML = "";
+    const normalizedSearch = normalizeSearchQuery(searchQuery);
     const filteredOrganizerCampaigns = organizerCampaigns
       .filter((campaign) => {
         if (activeFilter === "ongoing") {
@@ -854,10 +940,13 @@ export async function renderDashboardPage(mountNode) {
         }
         return true;
       })
+      .filter((campaign) => campaignMatchesSearch(campaign, normalizedSearch))
       .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
 
     if (!canManageCampaigns || filteredOrganizerCampaigns.length === 0) {
-      organizerCampaignEmpty.textContent = getEmptyStateMessage(activeFilter, true);
+      organizerCampaignEmpty.textContent = normalizedSearch
+        ? "No campaigns match your search."
+        : getEmptyStateMessage(activeFilter, true);
       organizerCampaignEmpty.hidden = !canManageCampaigns;
       return;
     }
@@ -1056,15 +1145,18 @@ export async function renderDashboardPage(mountNode) {
 
   const applyFilter = () => {
     const visibleCampaigns = getVisibleCampaigns();
+    const normalizedSearch = normalizeSearchQuery(searchQuery);
 
     const predicate = getFilterPredicate(activeFilter, { volunteerCampaignIds });
     const filteredCampaigns = visibleCampaigns
       .filter(predicate)
+      .filter((campaign) => campaignMatchesSearch(campaign, normalizedSearch))
       .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
     renderCampaignList(filteredCampaigns, mountNode, {
       userType,
       isAdmin,
       activeFilter,
+      searchQuery,
       useApplicationLabels: activeFilter === "ongoing" || activeFilter === "my-campaigns",
       joinedCampaignIds,
       onJoinCampaign: async (campaignId) => {
@@ -1196,6 +1288,18 @@ export async function renderDashboardPage(mountNode) {
       }
       applyFilter();
     });
+  });
+
+  dashboardSearchInput?.addEventListener("input", () => {
+    searchQuery = dashboardSearchInput.value || "";
+    applyFilter();
+    if (canManageCampaigns) {
+      renderOrganizerCampaigns();
+    }
+    if (isAdmin) {
+      renderAdminUsers();
+      renderAdminOversight();
+    }
   });
 
   adminUserFilterTabs.forEach((tab) => {

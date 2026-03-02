@@ -150,6 +150,28 @@
   margin-top: 1rem;
 }
 
+.dashboard-search {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.dashboard-search label {
+  font-weight: 700;
+  color: #1c3b63;
+  font-size: 0.9rem;
+}
+
+.dashboard-search input {
+  width: 100%;
+  max-width: 700px;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid #c8d4e5;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
 .admin-panel {
   margin-top: 1.2rem;
   background: #f8fbff;

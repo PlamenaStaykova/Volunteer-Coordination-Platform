@@ -16,6 +16,33 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+function normalizeSearchQuery(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function matchesSearch(value, query) {
+  if (!query) {
+    return true;
+  }
+  return String(value || "").toLowerCase().includes(query);
+}
+
+function publicCampaignMatchesSearch(campaign, query) {
+  if (!query) {
+    return true;
+  }
+
+  return [
+    campaign?.title,
+    campaign?.description,
+    campaign?.organization,
+    campaign?.state,
+    campaign?.volunteers_participated,
+    formatDateTime(campaign?.start_at),
+    formatDateTime(campaign?.end_at),
+  ].some((value) => matchesSearch(value, query));
+}
+
 export async function renderIndexPage(mountNode) {
   document.title = "Volunteer Coordination Platform - Home";
   mountNode.innerHTML = "";
@@ -26,9 +53,12 @@ export async function renderIndexPage(mountNode) {
   mountNode.append(pageContainer.firstElementChild);
 
   const homeGalleryList = mountNode.querySelector("#homeGalleryList");
+  const publicCampaignSearchInput = mountNode.querySelector("#publicCampaignSearchInput");
   const publicCampaignList = mountNode.querySelector("#publicCampaignList");
   const publicCampaignEmpty = mountNode.querySelector("#publicCampaignEmpty");
   const publicCampaignError = mountNode.querySelector("#publicCampaignError");
+  let publicCampaigns = [];
+  let searchQuery = "";
 
   const { data: galleryImages } = await getHomeGalleryImages();
   homeGalleryList.innerHTML = "";
@@ -64,16 +94,19 @@ export async function renderIndexPage(mountNode) {
     }
   }
 
-  const { data, error } = await getPublicCampaignOverview();
-  if (error) {
-    publicCampaignError.hidden = false;
-    publicCampaignError.textContent = error.message || "Unable to load campaign highlights right now.";
-  } else {
-    publicCampaignError.hidden = true;
-    publicCampaignList.innerHTML = "";
-    publicCampaignEmpty.hidden = (data ?? []).length !== 0;
+  const renderPublicCampaigns = () => {
+    const normalizedSearch = normalizeSearchQuery(searchQuery);
+    const visibleCampaigns = (publicCampaigns ?? []).filter((campaign) =>
+      publicCampaignMatchesSearch(campaign, normalizedSearch)
+    );
 
-    for (const campaign of data ?? []) {
+    publicCampaignList.innerHTML = "";
+    publicCampaignEmpty.hidden = visibleCampaigns.length !== 0;
+    publicCampaignEmpty.textContent = normalizedSearch
+      ? "No campaigns match your search."
+      : "No campaigns are available right now.";
+
+    for (const campaign of visibleCampaigns) {
       const item = document.createElement("li");
       item.className = "public-campaign-item";
       const state = campaign.state === "paused" ? "paused" : campaign.state === "ended" ? "ended" : "ongoing";
@@ -97,6 +130,21 @@ export async function renderIndexPage(mountNode) {
       `;
       publicCampaignList.append(item);
     }
+  };
+
+  publicCampaignSearchInput?.addEventListener("input", () => {
+    searchQuery = publicCampaignSearchInput.value || "";
+    renderPublicCampaigns();
+  });
+
+  const { data, error } = await getPublicCampaignOverview();
+  if (error) {
+    publicCampaignError.hidden = false;
+    publicCampaignError.textContent = error.message || "Unable to load campaign highlights right now.";
+  } else {
+    publicCampaignError.hidden = true;
+    publicCampaigns = data ?? [];
+    renderPublicCampaigns();
   }
 
   mountNode.append(renderFooter());
