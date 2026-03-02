@@ -5,29 +5,23 @@ import { renderFooter } from "../../components/footer/footer.js";
 import { requireAuth, requireRole } from "../../lib/guards.js";
 import {
   adminCreateUser,
-  assignVolunteerToCampaign,
-  cancelCampaignApplication,
   deleteAdminUser,
   deleteCampaign,
   deleteHomeGalleryImage,
   getAdminUsers,
-  getCampaignApplications,
   getCampaignDashboardData,
   getHomeGalleryImages,
   getIsAdmin,
   getJoinedCampaignIds,
   getOrganizerCampaigns,
-  getUserProfile,
+  getOrganizerCampaignSignupSummary,
   getUserType,
-  getVolunteerDirectory,
   getVolunteerParticipationCampaigns,
   joinCampaign,
   leaveCampaign,
   setCampaignStatus,
   updateAdminUser,
   uploadHomeGalleryImage,
-  updateCampaignRequiredSkills,
-  updateUserProfile,
   updateCampaignWithShift,
 } from "../../lib/supabase.js";
 
@@ -68,12 +62,35 @@ function toDateInputValue(value) {
   return `${year}-${month}-${day}`;
 }
 
+function getCampaignStateMeta(state) {
+  if (state === "done") {
+    return { label: "Done", className: "is-done" };
+  }
+  if (state === "paused") {
+    return { label: "Paused", className: "is-paused" };
+  }
+  return { label: "Open", className: "is-open" };
+}
+
+function getEventStatusMeta(status) {
+  if (status === "done") {
+    return { label: "Done", className: "is-done" };
+  }
+  if (status === "paused") {
+    return { label: "Paused", className: "is-paused" };
+  }
+  return { label: "Open", className: "is-open" };
+}
+
 function getFilterPredicate(filter, context = {}) {
   if (filter === "my-campaigns") {
     return (campaign) => context.volunteerCampaignIds?.has(campaign.id) || false;
   }
   if (filter === "ongoing") {
     return (campaign) => campaign.state === "open";
+  }
+  if (filter === "paused") {
+    return (campaign) => campaign.state === "paused";
   }
   if (filter === "ended") {
     return (campaign) => campaign.state === "done";
@@ -140,12 +157,12 @@ function renderCampaignList(campaigns, mountNode, context) {
     const item = document.createElement("li");
     item.className = "campaign-item";
 
-    const statusLabel = campaign.state === "done" ? "Done" : "Open";
+    const statusMeta = getCampaignStateMeta(campaign.state);
     item.innerHTML = `
       <article class="campaign-card">
         <header class="campaign-header">
           <h3><a class="campaign-title-link" href="/campaign/${campaign.id}">${campaign.title}</a></h3>
-          <span class="campaign-status ${campaign.state === "done" ? "is-done" : "is-open"}">${statusLabel}</span>
+          <span class="campaign-status ${statusMeta.className}">${statusMeta.label}</span>
         </header>
         <p class="campaign-org"><strong>Organization:</strong> ${campaign.organization}</p>
         <p class="campaign-meta"><strong>Location:</strong> ${campaign.location}</p>
@@ -191,7 +208,7 @@ function renderCampaignList(campaigns, mountNode, context) {
         }
       } else if (hasJoined) {
         const note = document.createElement("span");
-        note.textContent = "You joined this campaign.";
+        note.textContent = campaign.state === "paused" ? "Campaign is paused." : "You joined this campaign.";
         actions.append(note);
       }
 
@@ -232,40 +249,20 @@ export async function renderDashboardPage(mountNode) {
   pageContainer.innerHTML = pageHtml;
   mountNode.append(pageContainer.firstElementChild);
 
-  const profileForm = mountNode.querySelector("#profileForm");
-  const profileMessage = mountNode.querySelector("#profileMessage");
-  const profileFirstName = mountNode.querySelector("#profileFirstName");
-  const profileLastName = mountNode.querySelector("#profileLastName");
-  const profileEmail = mountNode.querySelector("#profileEmail");
-  const profilePhone = mountNode.querySelector("#profilePhone");
-  const volunteerSkillsFields = mountNode.querySelector("#volunteerSkillsFields");
-  const selectedSkillsLine = mountNode.querySelector("#selectedSkillsLine");
-  const selectedSkillsEditor = mountNode.querySelector("#selectedSkillsEditor");
-  const profileSkillsGrid = mountNode.querySelector("#profileSkillsGrid");
-  const organizerProfileFields = mountNode.querySelector("#organizerProfileFields");
-  const profileOrganizationName = mountNode.querySelector("#profileOrganizationName");
-  const profileCampaignManager = mountNode.querySelector("#profileCampaignManager");
-
   const activeCampaignsCount = mountNode.querySelector("#activeCampaignsCount");
   const allCampaignsCount = mountNode.querySelector("#allCampaignsCount");
   const dashboardError = mountNode.querySelector("#dashboardError");
+  const dashboardFiltersSection = mountNode.querySelector(".dashboard-filters");
+  const campaignListSection = mountNode.querySelector(".campaign-list-section");
+  const createCampaignHeroLink = mountNode.querySelector("#createCampaignHeroLink");
   const filterTabs = mountNode.querySelectorAll(".filter-tab");
   const volunteerMyCampaignsTab = mountNode.querySelector("#volunteerMyCampaignsTab");
   const adminPanel = mountNode.querySelector("#adminPanel");
+  const organizerToolsFilters = mountNode.querySelector("#organizerToolsFilters");
 
   const adminActionMessage = mountNode.querySelector("#adminActionMessage");
   const organizerCampaignList = mountNode.querySelector("#organizerCampaignList");
   const organizerCampaignEmpty = mountNode.querySelector("#organizerCampaignEmpty");
-  const applicationsHint = mountNode.querySelector("#applicationsHint");
-  const applicationsList = mountNode.querySelector("#applicationsList");
-  const applicationsEmpty = mountNode.querySelector("#applicationsEmpty");
-  const assignVolunteerForm = mountNode.querySelector("#assignVolunteerForm");
-  const assignCampaignSelect = mountNode.querySelector("#assignCampaignSelect");
-  const assignVolunteerSelect = mountNode.querySelector("#assignVolunteerSelect");
-  const assignVolunteerMessage = mountNode.querySelector("#assignVolunteerMessage");
-  const campaignRequiredSkillsLine = mountNode.querySelector("#campaignRequiredSkillsLine");
-  const campaignSkillsGrid = mountNode.querySelector("#campaignSkillsGrid");
-  const saveCampaignSkillsButton = mountNode.querySelector("#saveCampaignSkillsButton");
   const adminGalleryCard = mountNode.querySelector("#adminGalleryCard");
   const galleryUploadForm = mountNode.querySelector("#galleryUploadForm");
   const galleryTitle = mountNode.querySelector("#galleryTitle");
@@ -287,11 +284,20 @@ export async function renderDashboardPage(mountNode) {
   const [userType, isAdmin] = await Promise.all([getUserType(user), getIsAdmin(user)]);
   const canManageCampaigns = userType === "organizer" || isAdmin;
   const isVolunteer = userType === "volunteer" && !isAdmin;
-  const showOrganizerProfileFields = userType === "organizer" || isAdmin;
 
   adminPanel.hidden = !canManageCampaigns;
-  organizerProfileFields.hidden = !showOrganizerProfileFields;
-  volunteerSkillsFields.hidden = !isVolunteer;
+  if (dashboardFiltersSection) {
+    dashboardFiltersSection.hidden = canManageCampaigns;
+  }
+  if (organizerToolsFilters) {
+    organizerToolsFilters.hidden = !canManageCampaigns;
+  }
+  if (campaignListSection) {
+    campaignListSection.hidden = canManageCampaigns;
+  }
+  if (createCampaignHeroLink) {
+    createCampaignHeroLink.hidden = !canManageCampaigns;
+  }
   if (volunteerMyCampaignsTab) {
     volunteerMyCampaignsTab.hidden = !isVolunteer;
   }
@@ -306,12 +312,9 @@ export async function renderDashboardPage(mountNode) {
   let joinedCampaignIds = new Set();
   let volunteerCampaignIds = new Set();
   let organizerCampaigns = [];
-  let volunteerDirectory = [];
   let adminUsers = [];
   let homeGalleryImages = [];
-  let selectedApplicationsCampaignId = null;
   let activeFilter = "total";
-  let savedVolunteerSkills = [];
 
   const normalizeVolunteerSkills = (skills = []) => {
     const unique = new Set();
@@ -322,114 +325,6 @@ export async function renderDashboardPage(mountNode) {
       }
     }
     return [...unique];
-  };
-
-  const hasAtLeastOneMatchingSkill = (volunteerSkills = [], requiredSkills = []) => {
-    if (requiredSkills.length === 0) {
-      return true;
-    }
-
-    const volunteerSkillSet = new Set(normalizeVolunteerSkills(volunteerSkills));
-    return requiredSkills.some((skill) => volunteerSkillSet.has(skill));
-  };
-
-  const updateSelectedSkillsLine = () => {
-    if (!selectedSkillsLine) {
-      return;
-    }
-
-    selectedSkillsLine.textContent =
-      savedVolunteerSkills.length > 0
-        ? `Selected: ${savedVolunteerSkills.join(", ")}`
-        : "Selected: None";
-  };
-
-  const renderSelectedSkillsEditor = () => {
-    if (!selectedSkillsEditor) {
-      return;
-    }
-
-    selectedSkillsEditor.innerHTML = "";
-    if (savedVolunteerSkills.length === 0) {
-      selectedSkillsEditor.hidden = true;
-      return;
-    }
-
-    selectedSkillsEditor.hidden = false;
-    for (const skill of savedVolunteerSkills) {
-      const tag = document.createElement("div");
-      tag.className = "selected-skill-tag";
-
-      const label = document.createElement("span");
-      label.textContent = skill;
-
-      const removeButton = document.createElement("button");
-      removeButton.type = "button";
-      removeButton.className = "selected-skill-remove";
-      removeButton.textContent = "Remove";
-      removeButton.setAttribute("aria-label", `Remove ${skill}`);
-      removeButton.addEventListener("click", () => {
-        savedVolunteerSkills = savedVolunteerSkills.filter((value) => value !== skill);
-        updateSelectedSkillsLine();
-        renderSelectedSkillsEditor();
-        renderVolunteerSkillsOptions();
-      });
-
-      tag.append(label, removeButton);
-      selectedSkillsEditor.append(tag);
-    }
-  };
-
-  const renderVolunteerSkillsOptions = () => {
-    if (!profileSkillsGrid) {
-      return;
-    }
-
-    const pendingCheckedSkills = new Set(
-      [...profileSkillsGrid.querySelectorAll('input[name="volunteerSkills"]:checked')]
-        .map((input) => input.value)
-        .filter((value) => VOLUNTEER_SKILLS.includes(value))
-    );
-
-    profileSkillsGrid.innerHTML = "";
-    const selectedSet = new Set(savedVolunteerSkills);
-    const availableSkills = VOLUNTEER_SKILLS.filter((skill) => !selectedSet.has(skill));
-
-    if (availableSkills.length === 0) {
-      const helper = document.createElement("p");
-      helper.className = "skills-help";
-      helper.textContent = "All available skills are already selected.";
-      profileSkillsGrid.append(helper);
-      return;
-    }
-
-    for (const skill of availableSkills) {
-      const label = document.createElement("label");
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.name = "volunteerSkills";
-      checkbox.value = skill;
-      checkbox.checked = pendingCheckedSkills.has(skill);
-      label.append(checkbox, document.createTextNode(skill));
-      profileSkillsGrid.append(label);
-    }
-  };
-
-  const getPendingVolunteerSkills = () => {
-    if (!profileSkillsGrid) {
-      return [];
-    }
-    return normalizeVolunteerSkills(
-      [...profileSkillsGrid.querySelectorAll('input[name="volunteerSkills"]:checked')]
-      .map((input) => input.value)
-    );
-  };
-
-  const setSavedVolunteerSkills = (skills = []) => {
-    savedVolunteerSkills = normalizeVolunteerSkills(skills);
-    updateSelectedSkillsLine();
-    renderSelectedSkillsEditor();
-    renderVolunteerSkillsOptions();
   };
 
   const renderHomeGalleryAdminList = () => {
@@ -624,208 +519,54 @@ export async function renderDashboardPage(mountNode) {
     renderAdminUsers();
   };
 
-  const findOrganizerCampaignById = (campaignId) => {
-    return organizerCampaigns.find((campaign) => campaign.id === campaignId) || null;
-  };
-
-  const getSelectedInviteCampaign = () => {
-    return findOrganizerCampaignById(assignCampaignSelect?.value || "");
-  };
-
-  const getSelectedCampaignRequiredSkills = () => {
-    const campaign = getSelectedInviteCampaign();
-    return normalizeVolunteerSkills(campaign?.required_skills || []);
-  };
-
-  const updateCampaignRequiredSkillsLine = () => {
-    if (!campaignRequiredSkillsLine) {
-      return;
-    }
-
-    const selectedSkills = getSelectedCampaignRequiredSkills();
-    campaignRequiredSkillsLine.textContent =
-      selectedSkills.length > 0 ? `Required: ${selectedSkills.join(", ")}` : "Required: None";
-  };
-
-  const getPendingCampaignRequiredSkills = () => {
-    if (!campaignSkillsGrid) {
-      return [];
-    }
-
-    return normalizeVolunteerSkills(
-      [...campaignSkillsGrid.querySelectorAll('input[name="campaignRequiredSkills"]:checked')].map(
-        (input) => input.value
-      )
-    );
-  };
-
-  const renderCampaignSkillsEditor = () => {
-    if (!campaignSkillsGrid) {
-      return;
-    }
-
-    const selectedSkills = new Set(getSelectedCampaignRequiredSkills());
-    campaignSkillsGrid.innerHTML = "";
-
-    for (const skill of VOLUNTEER_SKILLS) {
-      const label = document.createElement("label");
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.name = "campaignRequiredSkills";
-      checkbox.value = skill;
-      checkbox.checked = selectedSkills.has(skill);
-      label.append(checkbox, document.createTextNode(skill));
-      campaignSkillsGrid.append(label);
-    }
-
-    updateCampaignRequiredSkillsLine();
-  };
-
-  const renderInviteVolunteerOptions = () => {
-    if (!assignVolunteerSelect) {
-      return;
-    }
-
-    const requiredSkills = getSelectedCampaignRequiredSkills();
-    const eligibleVolunteers = volunteerDirectory.filter((volunteer) =>
-      hasAtLeastOneMatchingSkill(volunteer.volunteer_skills || [], requiredSkills)
-    );
-
-    assignVolunteerSelect.innerHTML = "";
-    if (eligibleVolunteers.length === 0) {
-      const option = document.createElement("option");
-      option.value = "";
-      option.textContent =
-        requiredSkills.length > 0
-          ? "No volunteers match selected skills"
-          : "No volunteers available";
-      assignVolunteerSelect.append(option);
-      return;
-    }
-
-    for (const volunteer of eligibleVolunteers) {
-      const option = document.createElement("option");
-      option.value = volunteer.id;
-      option.textContent = volunteer.display_name;
-      assignVolunteerSelect.append(option);
-    }
-  };
-
-  const populateInviteCampaignSelect = () => {
-    if (!assignCampaignSelect) {
-      return;
-    }
-
-    const previousValue = assignCampaignSelect.value || selectedApplicationsCampaignId || "";
-    assignCampaignSelect.innerHTML = "";
-
-    for (const campaign of organizerCampaigns) {
-      const option = document.createElement("option");
-      option.value = campaign.id;
-      option.textContent = campaign.title;
-      assignCampaignSelect.append(option);
-    }
-
-    if (organizerCampaigns.length === 0) {
-      assignVolunteerSelect.innerHTML = "";
-      if (campaignSkillsGrid) {
-        campaignSkillsGrid.innerHTML = "";
-      }
-      if (campaignRequiredSkillsLine) {
-        campaignRequiredSkillsLine.textContent = "Required: None";
-      }
-      return;
-    }
-
-    const matchingCampaign = organizerCampaigns.find((campaign) => campaign.id === previousValue);
-    assignCampaignSelect.value = matchingCampaign ? matchingCampaign.id : organizerCampaigns[0].id;
-
-    renderCampaignSkillsEditor();
-    renderInviteVolunteerOptions();
-  };
-
-  const loadApplicationsForCampaign = async (campaignId) => {
-    applicationsList.innerHTML = "";
-    applicationsEmpty.hidden = true;
-
-    const campaign = findOrganizerCampaignById(campaignId);
-    applicationsHint.hidden = false;
-    applicationsHint.textContent = campaign
-      ? `Showing volunteers for: ${campaign.title}`
-      : "Showing volunteers for selected campaign.";
-
-    const { data, error } = await getCampaignApplications(campaignId);
-    if (error) {
-      applicationsEmpty.hidden = false;
-      applicationsEmpty.textContent = error.message || "Unable to load applications.";
-      return;
-    }
-
-    if (data.length === 0) {
-      applicationsEmpty.hidden = false;
-      applicationsEmpty.textContent = "No active applications for this campaign.";
-      return;
-    }
-
-    for (const application of data) {
-      const item = document.createElement("li");
-      item.className = "application-item";
-      item.innerHTML = `
-        <p><strong>${application.volunteer_name}</strong> (${application.volunteer_type})</p>
-        <p>Status: ${application.status}</p>
-      `;
-
-      const actions = document.createElement("div");
-      actions.className = "item-actions";
-      const removeButton = document.createElement("button");
-      removeButton.type = "button";
-      removeButton.className = "btn btn-small btn-danger";
-      removeButton.textContent = "Remove from Campaign";
-      removeButton.addEventListener("click", async () => {
-        const { error: removeError } = await cancelCampaignApplication(application.signup_id);
-        if (removeError) {
-          setInlineMessage(adminActionMessage, removeError.message || "Failed to remove volunteer.");
-          return;
-        }
-
-        setInlineMessage(adminActionMessage, "Volunteer removed from campaign.", "success");
-        await loadApplicationsForCampaign(campaignId);
-        await loadCampaignData();
-      });
-      actions.append(removeButton);
-      item.append(actions);
-      applicationsList.append(item);
-    }
-  };
-
   const renderOrganizerCampaigns = () => {
     organizerCampaignList.innerHTML = "";
+    const filteredOrganizerCampaigns = organizerCampaigns
+      .filter((campaign) => {
+        if (activeFilter === "ongoing") {
+          return campaign.status === "published";
+        }
+        if (activeFilter === "paused") {
+          return campaign.status === "paused";
+        }
+        if (activeFilter === "ended") {
+          return campaign.status === "done";
+        }
+        return true;
+      })
+      .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
 
-    if (!canManageCampaigns || organizerCampaigns.length === 0) {
+    if (!canManageCampaigns || filteredOrganizerCampaigns.length === 0) {
       organizerCampaignEmpty.hidden = !canManageCampaigns;
       return;
     }
 
     organizerCampaignEmpty.hidden = true;
 
-    for (const campaign of organizerCampaigns) {
+    for (const campaign of filteredOrganizerCampaigns) {
       const item = document.createElement("li");
       item.className = "organizer-campaign-item";
-      const actionLabel = campaign.status === "done" ? "Reopen" : "Mark Done";
+      const statusMeta = getEventStatusMeta(campaign.status);
       const requiredSkills = normalizeVolunteerSkills(campaign.required_skills || []);
       const requiredSkillsSummary =
         requiredSkills.length > 0
           ? requiredSkills.join(", ")
           : "No specific skills are required for this campaign. All volunteers can be invited.";
+      const invitedCount = Number(campaign.invited_count || 0);
+      const appliedCount = Number(campaign.applied_count || 0);
+      const invitedSummary = invitedCount > 0 ? `Yes (${invitedCount})` : "No";
+      const appliedSummary = appliedCount > 0 ? `Yes (${appliedCount})` : "No";
 
       item.innerHTML = `
         <div class="campaign-title-row">
           <h4>${campaign.title}</h4>
           <button type="button" class="icon-btn" data-action="toggle-edit" aria-label="Edit campaign">&#9998;</button>
         </div>
-        <p><strong>Status:</strong> ${campaign.status}</p>
+        <p><strong>Status:</strong> <span class="campaign-status ${statusMeta.className}">${statusMeta.label}</span></p>
         <p><strong>Dates:</strong> ${formatDateTime(campaign.start_at)} - ${formatDateTime(campaign.end_at)}</p>
         <p><strong>Required Skills:</strong> ${requiredSkillsSummary}</p>
+        <p><strong>Volunteers Invited:</strong> ${invitedSummary}</p>
+        <p><strong>Volunteer Applications:</strong> ${appliedSummary}</p>
         <form class="inline-edit-form" hidden>
           <div class="inline-edit-form-grid">
             <label class="full-width">
@@ -904,10 +645,33 @@ export async function renderDashboardPage(mountNode) {
       const actions = document.createElement("div");
       actions.className = "item-actions";
 
+      const pauseButton = document.createElement("button");
+      pauseButton.type = "button";
+      pauseButton.className = "btn btn-small btn-neutral";
+      if (campaign.status === "paused") {
+        pauseButton.textContent = "Resume";
+      } else {
+        pauseButton.textContent = "Pause";
+      }
+      pauseButton.hidden = campaign.status === "done";
+      pauseButton.addEventListener("click", async () => {
+        const nextStatus = campaign.status === "paused" ? "published" : "paused";
+        const { error } = await setCampaignStatus(campaign.id, nextStatus);
+        if (error) {
+          setInlineMessage(adminActionMessage, error.message || "Failed to update campaign status.");
+          return;
+        }
+
+        setInlineMessage(adminActionMessage, "Campaign status updated.", "success");
+        await loadOrganizerData();
+        await loadCampaignData();
+      });
+      actions.append(pauseButton);
+
       const statusButton = document.createElement("button");
       statusButton.type = "button";
       statusButton.className = "btn btn-small";
-      statusButton.textContent = actionLabel;
+      statusButton.textContent = campaign.status === "done" ? "Reopen" : "Mark Done";
       statusButton.addEventListener("click", async () => {
         const nextStatus = campaign.status === "done" ? "published" : "done";
         const { error } = await setCampaignStatus(campaign.id, nextStatus);
@@ -921,19 +685,6 @@ export async function renderDashboardPage(mountNode) {
         await loadCampaignData();
       });
       actions.append(statusButton);
-
-      const applicationsButton = document.createElement("button");
-      applicationsButton.type = "button";
-      applicationsButton.className = "btn btn-small btn-neutral";
-      applicationsButton.textContent = "View Volunteers";
-      applicationsButton.addEventListener("click", async () => {
-        selectedApplicationsCampaignId = campaign.id;
-        assignCampaignSelect.value = campaign.id;
-        renderCampaignSkillsEditor();
-        renderInviteVolunteerOptions();
-        await loadApplicationsForCampaign(campaign.id);
-      });
-      actions.append(applicationsButton);
 
       const deleteButton = document.createElement("button");
       deleteButton.type = "button";
@@ -949,14 +700,6 @@ export async function renderDashboardPage(mountNode) {
         if (error) {
           setInlineMessage(adminActionMessage, error.message || "Failed to delete campaign.");
           return;
-        }
-
-        if (selectedApplicationsCampaignId === campaign.id) {
-          selectedApplicationsCampaignId = null;
-          applicationsList.innerHTML = "";
-          applicationsHint.hidden = false;
-          applicationsHint.textContent = 'Select "View Volunteers" from a campaign above.';
-          applicationsEmpty.hidden = true;
         }
 
         setInlineMessage(adminActionMessage, "Campaign deleted.", "success");
@@ -1011,31 +754,6 @@ export async function renderDashboardPage(mountNode) {
         await loadCampaignData();
       },
     });
-  };
-
-  const loadProfileData = async () => {
-    const { data, error } = await getUserProfile(user);
-    if (error) {
-      setInlineMessage(profileMessage, error.message || "Unable to load profile.");
-      return;
-    }
-
-    const nameParts = String(data?.display_name || "").trim().split(/\s+/).filter(Boolean);
-    const fallbackFirstName = nameParts[0] || "";
-    const fallbackLastName = nameParts.slice(1).join(" ");
-
-    profileFirstName.value = data?.first_name || fallbackFirstName;
-    profileLastName.value = data?.last_name || fallbackLastName;
-    profileEmail.value = data?.email || user.email || "";
-    profilePhone.value = data?.phone || "";
-
-    if (showOrganizerProfileFields) {
-      profileOrganizationName.value = data?.organization_name || "";
-      profileCampaignManager.value = data?.campaign_manager || "";
-    }
-    if (isVolunteer) {
-      setSavedVolunteerSkills(data?.volunteer_skills || []);
-    }
   };
 
   const loadCampaignData = async () => {
@@ -1101,10 +819,10 @@ export async function renderDashboardPage(mountNode) {
       return;
     }
 
-    const [campaignsResult, dashboardResult, volunteersResult] = await Promise.all([
+    const [campaignsResult, dashboardResult, signupSummaryResult] = await Promise.all([
       getOrganizerCampaigns(),
       getCampaignDashboardData(),
-      getVolunteerDirectory(),
+      getOrganizerCampaignSignupSummary(),
     ]);
 
     if (campaignsResult.error) {
@@ -1112,26 +830,25 @@ export async function renderDashboardPage(mountNode) {
       organizerCampaigns = [];
     } else {
       const capacityById = new Map((dashboardResult.data ?? []).map((campaign) => [campaign.id, campaign.max_volunteers]));
+      const signupSummaryByCampaignId = new Map(
+        (signupSummaryResult.data ?? []).map((item) => [
+          item.campaign_id,
+          {
+            invited_count: Number(item.invited_count || 0),
+            applied_count: Number(item.applied_count || 0),
+          },
+        ])
+      );
       organizerCampaigns = (campaignsResult.data ?? []).map((campaign) => ({
         ...campaign,
         capacity: capacityById.get(campaign.id) ?? 10,
+        invited_count: signupSummaryByCampaignId.get(campaign.id)?.invited_count ?? 0,
+        applied_count: signupSummaryByCampaignId.get(campaign.id)?.applied_count ?? 0,
       }));
       setInlineMessage(adminActionMessage, "");
     }
 
-    volunteerDirectory = volunteersResult.error ? [] : volunteersResult.data ?? [];
-    populateInviteCampaignSelect();
-    selectedApplicationsCampaignId = assignCampaignSelect.value || null;
     renderOrganizerCampaigns();
-
-    if (selectedApplicationsCampaignId) {
-      await loadApplicationsForCampaign(selectedApplicationsCampaignId);
-    } else {
-      applicationsHint.hidden = false;
-      applicationsHint.textContent = 'Select "View Volunteers" from a campaign above.';
-      applicationsList.innerHTML = "";
-      applicationsEmpty.hidden = true;
-    }
   };
 
   filterTabs.forEach((tab) => {
@@ -1139,119 +856,12 @@ export async function renderDashboardPage(mountNode) {
       activeFilter = tab.dataset.filter || "total";
       filterTabs.forEach((otherTab) => otherTab.classList.remove("is-active"));
       tab.classList.add("is-active");
+      if (canManageCampaigns) {
+        renderOrganizerCampaigns();
+      }
       applyFilter();
     });
   });
-
-  profileForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-
-    const mergedVolunteerSkills = normalizeVolunteerSkills([
-      ...savedVolunteerSkills,
-      ...getPendingVolunteerSkills(),
-    ]);
-
-    const payload = {
-      first_name: profileFirstName.value,
-      last_name: profileLastName.value,
-      email: profileEmail.value,
-      phone: profilePhone.value,
-      organization_name: showOrganizerProfileFields ? profileOrganizationName.value : "",
-      campaign_manager: showOrganizerProfileFields ? profileCampaignManager.value : "",
-      volunteer_skills: isVolunteer ? mergedVolunteerSkills : [],
-      user_type: userType === "organizer" ? "organizer" : "volunteer",
-    };
-
-    if (!payload.first_name.trim() || !payload.last_name.trim() || !payload.email.trim()) {
-      setInlineMessage(profileMessage, "First name, last name, and email are required.");
-      return;
-    }
-
-    const { data, error } = await updateUserProfile(payload, user);
-    if (error) {
-      setInlineMessage(profileMessage, error.message || "Unable to save profile.");
-      return;
-    }
-
-    profileFirstName.value = data?.first_name || payload.first_name.trim();
-    profileLastName.value = data?.last_name || payload.last_name.trim();
-    profileEmail.value = data?.email || payload.email.trim();
-    profilePhone.value = data?.phone || payload.phone.trim();
-    if (showOrganizerProfileFields) {
-      profileOrganizationName.value = data?.organization_name || payload.organization_name.trim();
-      profileCampaignManager.value = data?.campaign_manager || payload.campaign_manager.trim();
-    }
-    if (isVolunteer) {
-      setSavedVolunteerSkills(data?.volunteer_skills || payload.volunteer_skills);
-    }
-
-    setInlineMessage(profileMessage, "Profile saved.", "success");
-    await loadCampaignData();
-  });
-
-  renderVolunteerSkillsOptions();
-  if (canManageCampaigns) {
-    assignCampaignSelect.addEventListener("change", async () => {
-      selectedApplicationsCampaignId = assignCampaignSelect.value || null;
-      renderCampaignSkillsEditor();
-      renderInviteVolunteerOptions();
-      if (selectedApplicationsCampaignId) {
-        await loadApplicationsForCampaign(selectedApplicationsCampaignId);
-      }
-    });
-
-    saveCampaignSkillsButton.addEventListener("click", async () => {
-      const campaignId = assignCampaignSelect.value;
-      if (!campaignId) {
-        setInlineMessage(assignVolunteerMessage, "Select a campaign first.");
-        return;
-      }
-
-      const selectedSkills = getPendingCampaignRequiredSkills();
-      const { data, error } = await updateCampaignRequiredSkills(campaignId, selectedSkills);
-      if (error) {
-        setInlineMessage(assignVolunteerMessage, error.message || "Unable to save required skills.");
-        return;
-      }
-
-      organizerCampaigns = organizerCampaigns.map((campaign) =>
-        campaign.id === campaignId
-          ? {
-              ...campaign,
-              required_skills: normalizeVolunteerSkills(data?.required_skills || selectedSkills),
-            }
-          : campaign
-      );
-
-      renderOrganizerCampaigns();
-      renderCampaignSkillsEditor();
-      renderInviteVolunteerOptions();
-      setInlineMessage(assignVolunteerMessage, "Required skills updated.", "success");
-    });
-
-    assignVolunteerForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-
-      const campaignId = assignCampaignSelect.value;
-      const volunteerId = assignVolunteerSelect.value;
-      if (!campaignId || !volunteerId) {
-        setInlineMessage(assignVolunteerMessage, "Select campaign and eligible volunteer.");
-        return;
-      }
-
-      const { error } = await assignVolunteerToCampaign(campaignId, volunteerId);
-      if (error) {
-        setInlineMessage(assignVolunteerMessage, error.message || "Unable to invite volunteer.");
-        return;
-      }
-
-      setInlineMessage(assignVolunteerMessage, "Invitation sent successfully.", "success");
-      selectedApplicationsCampaignId = campaignId;
-      await loadApplicationsForCampaign(campaignId);
-      await loadOrganizerData();
-      await loadCampaignData();
-    });
-  }
 
   if (isAdmin) {
     galleryUploadForm.addEventListener("submit", async (event) => {
@@ -1299,7 +909,6 @@ export async function renderDashboardPage(mountNode) {
     });
   }
 
-  await loadProfileData();
   await loadVolunteerData();
   await loadOrganizerData();
   await loadHomeGalleryData();

@@ -2,51 +2,10 @@
   <div class="container page-inner">
     <section class="dashboard-hero">
       <h1>Campaign Dashboard</h1>
-      <p>Browse all available campaigns across the platform.</p>
-    </section>
-
-    <section class="profile-panel" aria-label="Profile details">
-      <div class="profile-panel-header">
-        <h2>Your Profile</h2>
-        <p>Keep your contact details up to date for campaign coordination.</p>
+      <div class="dashboard-hero-actions">
+        <a class="btn btn-neutral" href="/profile">My Profile</a>
+        <a id="createCampaignHeroLink" class="btn" href="/campaign/new" hidden>Create Campaign</a>
       </div>
-      <form id="profileForm" class="profile-form">
-        <label>
-          First Name
-          <input id="profileFirstName" type="text" required />
-        </label>
-        <label>
-          Last Name
-          <input id="profileLastName" type="text" required />
-        </label>
-        <label>
-          Email
-          <input id="profileEmail" type="email" required />
-        </label>
-        <label>
-          Phone
-          <input id="profilePhone" type="tel" />
-        </label>
-        <div id="volunteerSkillsFields" class="profile-form-row volunteer-skills-fields" hidden>
-          <p class="skills-title">Skills</p>
-          <p id="selectedSkillsLine" class="skills-selected-line">Selected: None</p>
-          <div id="selectedSkillsEditor" class="selected-skills-editor" aria-label="Selected skills" hidden></div>
-          <p class="skills-help">Select your volunteer skills (up to 10):</p>
-          <div id="profileSkillsGrid" class="skills-grid"></div>
-        </div>
-        <div id="organizerProfileFields" class="profile-form-row profile-organizer-fields" hidden>
-          <label>
-            Organization Name
-            <input id="profileOrganizationName" type="text" />
-          </label>
-          <label>
-            Campaign Manager
-            <input id="profileCampaignManager" type="text" />
-          </label>
-        </div>
-        <button class="btn profile-save-btn" type="submit">Save Profile</button>
-      </form>
-      <p id="profileMessage" class="inline-message" hidden></p>
     </section>
 
     <section class="dashboard-stats" aria-label="Campaign statistics">
@@ -64,6 +23,7 @@
       <div class="filter-tabs">
         <button class="filter-tab is-active" data-filter="total" type="button">Total Campaigns</button>
         <button class="filter-tab" data-filter="ongoing" type="button">Ongoing Campaigns</button>
+        <button class="filter-tab" data-filter="paused" type="button">Paused Campaigns</button>
         <button class="filter-tab" data-filter="ended" type="button">Ended Campaigns</button>
         <button id="volunteerMyCampaignsTab" class="filter-tab" data-filter="my-campaigns" type="button" hidden>
           My Campaigns
@@ -72,52 +32,20 @@
     </section>
 
     <section id="adminPanel" class="admin-panel" hidden>
-      <div class="admin-panel-header">
-        <h2>Organizer Tools</h2>
-        <p>Create, update, close, delete campaigns and manage volunteers.</p>
-      </div>
-
-      <div class="admin-grid">
-        <article class="admin-card">
-          <h3>Create Campaign</h3>
-          <p>Open the campaign creation page to define details, required skills, and invitations in one place.</p>
-          <a class="btn create-campaign-link" href="/campaign/new">Create Campaign</a>
-        </article>
-      </div>
       <p id="adminActionMessage" class="inline-message" hidden></p>
 
       <article class="admin-card admin-list-card">
         <h3>My Campaigns</h3>
+        <section id="organizerToolsFilters" class="dashboard-filters organizer-tools-filters" hidden>
+          <div class="filter-tabs">
+            <button class="filter-tab is-active" data-filter="total" type="button">Total Campaigns</button>
+            <button class="filter-tab" data-filter="ongoing" type="button">Ongoing Campaigns</button>
+            <button class="filter-tab" data-filter="paused" type="button">Paused Campaigns</button>
+            <button class="filter-tab" data-filter="ended" type="button">Ended Campaigns</button>
+          </div>
+        </section>
         <ul id="organizerCampaignList" class="organizer-campaign-list"></ul>
         <p id="organizerCampaignEmpty" class="campaign-empty-state" hidden>No campaigns created yet.</p>
-      </article>
-
-      <article class="admin-card admin-list-card">
-        <h3>Campaign Invitations</h3>
-        <form id="assignVolunteerForm" class="admin-form compact-admin-form campaign-invite-form">
-          <label>
-            Campaign
-            <select id="assignCampaignSelect" required></select>
-          </label>
-          <div class="required-skills-block">
-            <p class="skills-title">Required Skills</p>
-            <p id="campaignRequiredSkillsLine" class="skills-selected-line">Required: None</p>
-            <p class="skills-help">Select required skills for this campaign.</p>
-            <div id="campaignSkillsGrid" class="skills-grid"></div>
-            <button id="saveCampaignSkillsButton" class="btn btn-small btn-neutral" type="button">
-              Save Required Skills
-            </button>
-          </div>
-          <label>
-            Eligible Volunteer
-            <select id="assignVolunteerSelect" required></select>
-          </label>
-          <button class="btn btn-small" type="submit">Invite Volunteer</button>
-        </form>
-        <p id="assignVolunteerMessage" class="inline-message" hidden></p>
-        <p id="applicationsHint" class="admin-hint">Select "View Volunteers" from a campaign above.</p>
-        <ul id="applicationsList" class="applications-list"></ul>
-        <p id="applicationsEmpty" class="campaign-empty-state" hidden>No active applications for this campaign.</p>
       </article>
 
       <article id="adminGalleryCard" class="admin-card admin-list-card" hidden>

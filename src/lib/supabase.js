@@ -252,6 +252,19 @@ function normalizeAuthRole(value) {
   return null;
 }
 
+function normalizeCampaignStatus(value) {
+  if (!value || typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "published" || normalized === "paused" || normalized === "done") {
+    return normalized;
+  }
+
+  return null;
+}
+
 function normalizeSkills(skills = []) {
   const unique = new Set();
   for (const skill of Array.isArray(skills) ? skills : []) {
@@ -602,6 +615,111 @@ export async function getOrganizerCampaigns() {
   return { data: data ?? [], error };
 }
 
+export async function getOrganizerCampaignSignupSummary() {
+  if (!supabase) {
+    return { data: [], error: new Error(missingConfigMessage) };
+  }
+
+  const user = await getCurrentUser();
+  if (!user) {
+    return { data: [], error: new Error("User not authenticated.") };
+  }
+
+  const { data: events, error: eventsError } = await supabase
+    .from("events")
+    .select("id")
+    .eq("created_by", user.id);
+
+  if (eventsError) {
+    return { data: [], error: eventsError };
+  }
+
+  const eventIds = (events ?? []).map((event) => event.id);
+  if (eventIds.length === 0) {
+    return { data: [], error: null };
+  }
+
+  const { data: shifts, error: shiftsError } = await supabase
+    .from("shifts")
+    .select("id, event_id")
+    .in("event_id", eventIds);
+
+  if (shiftsError) {
+    return { data: [], error: shiftsError };
+  }
+
+  const shiftIds = (shifts ?? []).map((shift) => shift.id);
+  if (shiftIds.length === 0) {
+    return { data: [], error: null };
+  }
+
+  let signups = [];
+  const { data: signupsWithSource, error: signupsWithSourceError } = await supabase
+    .from("shift_signups")
+    .select("shift_id, user_id, status, signup_source")
+    .in("shift_id", shiftIds)
+    .in("status", ["signed", "attended"]);
+
+  if (signupsWithSourceError) {
+    const missingSourceColumn =
+      String(signupsWithSourceError.message || "").includes("signup_source") &&
+      String(signupsWithSourceError.message || "").includes("does not exist");
+    if (!missingSourceColumn) {
+      return { data: [], error: signupsWithSourceError };
+    }
+
+    const { data: signupsFallback, error: signupsFallbackError } = await supabase
+      .from("shift_signups")
+      .select("shift_id, user_id, status")
+      .in("shift_id", shiftIds)
+      .in("status", ["signed", "attended"]);
+
+    if (signupsFallbackError) {
+      return { data: [], error: signupsFallbackError };
+    }
+
+    signups = (signupsFallback ?? []).map((signup) => ({
+      ...signup,
+      signup_source: "applied",
+    }));
+  } else {
+    signups = signupsWithSource ?? [];
+  }
+
+  const eventByShiftId = new Map((shifts ?? []).map((shift) => [shift.id, shift.event_id]));
+  const summaryByEventId = new Map();
+
+  for (const signup of signups) {
+    const eventId = eventByShiftId.get(signup.shift_id);
+    if (!eventId) {
+      continue;
+    }
+
+    if (!summaryByEventId.has(eventId)) {
+      summaryByEventId.set(eventId, {
+        invitedUsers: new Set(),
+        appliedUsers: new Set(),
+      });
+    }
+
+    const bucket = summaryByEventId.get(eventId);
+    const source = signup.signup_source === "invited" ? "invited" : "applied";
+    if (source === "invited") {
+      bucket.invitedUsers.add(signup.user_id);
+    } else {
+      bucket.appliedUsers.add(signup.user_id);
+    }
+  }
+
+  const summary = [...summaryByEventId.entries()].map(([eventId, bucket]) => ({
+    campaign_id: eventId,
+    invited_count: bucket.invitedUsers.size,
+    applied_count: bucket.appliedUsers.size,
+  }));
+
+  return { data: summary, error: null };
+}
+
 export async function getCampaignById(campaignId) {
   if (!supabase) {
     return { data: null, error: new Error(missingConfigMessage) };
@@ -655,7 +773,7 @@ export async function getCampaignById(campaignId) {
       organization: organizerProfile?.organization_name || organizerProfile?.display_name || "Unknown Organization",
       max_volunteers: maxVolunteers,
       vacancies: vacancies ?? 0,
-      state: event.status === "done" ? "done" : "open",
+      state: event.status === "done" ? "done" : event.status === "paused" ? "paused" : "open",
     },
     error: null,
   };
@@ -803,9 +921,14 @@ export async function setCampaignStatus(campaignId, status) {
     return { data: null, error: new Error(missingConfigMessage) };
   }
 
+  const normalizedStatus = normalizeCampaignStatus(status);
+  if (!normalizedStatus) {
+    return { data: null, error: new Error("Invalid campaign status.") };
+  }
+
   const { data, error } = await supabase
     .from("events")
-    .update({ status })
+    .update({ status: normalizedStatus })
     .eq("id", campaignId)
     .select("id, status")
     .single();
@@ -951,7 +1074,7 @@ export async function assignVolunteerToCampaign(campaignId, volunteerId) {
 
   const { data: existingSignup, error: signupLookupError } = await supabase
     .from("shift_signups")
-    .select("id")
+    .select("id, signup_source")
     .eq("shift_id", primaryShift.id)
     .eq("user_id", volunteerId)
     .maybeSingle();
@@ -963,18 +1086,53 @@ export async function assignVolunteerToCampaign(campaignId, volunteerId) {
   if (existingSignup?.id) {
     const { error: updateError } = await supabase
       .from("shift_signups")
+      .update({
+        status: "signed",
+        signup_source: existingSignup.signup_source || "invited",
+      })
+      .eq("id", existingSignup.id);
+    if (!updateError) {
+      return { error: null };
+    }
+
+    const missingSourceColumn =
+      String(updateError.message || "").includes("signup_source") &&
+      String(updateError.message || "").includes("does not exist");
+    if (!missingSourceColumn) {
+      return { error: updateError };
+    }
+
+    const { error: fallbackUpdateError } = await supabase
+      .from("shift_signups")
       .update({ status: "signed" })
       .eq("id", existingSignup.id);
-    return { error: updateError };
+    return { error: fallbackUpdateError };
   }
 
   const { error: insertError } = await supabase.from("shift_signups").insert({
     shift_id: primaryShift.id,
     user_id: volunteerId,
     status: "signed",
+    signup_source: "invited",
   });
 
-  return { error: insertError };
+  if (!insertError) {
+    return { error: null };
+  }
+
+  const missingSourceColumn =
+    String(insertError.message || "").includes("signup_source") &&
+    String(insertError.message || "").includes("does not exist");
+  if (!missingSourceColumn) {
+    return { error: insertError };
+  }
+
+  const { error: fallbackInsertError } = await supabase.from("shift_signups").insert({
+    shift_id: primaryShift.id,
+    user_id: volunteerId,
+    status: "signed",
+  });
+  return { error: fallbackInsertError };
 }
 
 export async function getJoinedCampaignIds() {
@@ -1031,6 +1189,24 @@ export async function joinCampaign(campaignId) {
     return { error: new Error("Only volunteers can join campaigns.") };
   }
 
+  const { data: event, error: eventError } = await supabase
+    .from("events")
+    .select("id, status")
+    .eq("id", campaignId)
+    .maybeSingle();
+
+  if (eventError) {
+    return { error: eventError };
+  }
+
+  if (!event) {
+    return { error: new Error("Campaign not found.") };
+  }
+
+  if (event.status !== "published") {
+    return { error: new Error("Only ongoing campaigns can be joined.") };
+  }
+
   const { data: primaryShift, error: shiftError } = await getPrimaryShiftForCampaign(campaignId);
   if (shiftError || !primaryShift?.id) {
     return { error: shiftError || new Error("No available shift for this campaign.") };
@@ -1038,7 +1214,7 @@ export async function joinCampaign(campaignId) {
 
   const { data: existingSignup, error: signupLookupError } = await supabase
     .from("shift_signups")
-    .select("id, status")
+    .select("id, status, signup_source")
     .eq("shift_id", primaryShift.id)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -1050,18 +1226,53 @@ export async function joinCampaign(campaignId) {
   if (existingSignup?.id) {
     const { error: updateError } = await supabase
       .from("shift_signups")
+      .update({
+        status: "signed",
+        signup_source: existingSignup.signup_source || "applied",
+      })
+      .eq("id", existingSignup.id);
+    if (!updateError) {
+      return { error: null };
+    }
+
+    const missingSourceColumn =
+      String(updateError.message || "").includes("signup_source") &&
+      String(updateError.message || "").includes("does not exist");
+    if (!missingSourceColumn) {
+      return { error: updateError };
+    }
+
+    const { error: fallbackUpdateError } = await supabase
+      .from("shift_signups")
       .update({ status: "signed" })
       .eq("id", existingSignup.id);
-    return { error: updateError };
+    return { error: fallbackUpdateError };
   }
 
   const { error: insertError } = await supabase.from("shift_signups").insert({
     shift_id: primaryShift.id,
     user_id: user.id,
     status: "signed",
+    signup_source: "applied",
   });
 
-  return { error: insertError };
+  if (!insertError) {
+    return { error: null };
+  }
+
+  const missingSourceColumn =
+    String(insertError.message || "").includes("signup_source") &&
+    String(insertError.message || "").includes("does not exist");
+  if (!missingSourceColumn) {
+    return { error: insertError };
+  }
+
+  const { error: fallbackInsertError } = await supabase.from("shift_signups").insert({
+    shift_id: primaryShift.id,
+    user_id: user.id,
+    status: "signed",
+  });
+  return { error: fallbackInsertError };
 }
 
 export async function leaveCampaign(campaignId) {

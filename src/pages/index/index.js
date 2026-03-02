@@ -76,13 +76,14 @@ export async function renderIndexPage(mountNode) {
     for (const campaign of data ?? []) {
       const item = document.createElement("li");
       item.className = "public-campaign-item";
-      const isEnded = campaign.state === "ended";
+      const state = campaign.state === "paused" ? "paused" : campaign.state === "ended" ? "ended" : "ongoing";
+      const stateLabel = state === "ended" ? "Ended" : state === "paused" ? "Paused" : "Ongoing";
       item.innerHTML = `
         <article class="public-campaign-card">
           <header class="public-campaign-head">
             <h3><a href="/campaign/${campaign.id}">${campaign.title}</a></h3>
-            <span class="public-campaign-state ${isEnded ? "is-ended" : "is-ongoing"}">
-              ${isEnded ? "Ended" : "Ongoing"}
+            <span class="public-campaign-state is-${state}">
+              ${stateLabel}
             </span>
           </header>
           <p class="public-campaign-org"><strong>Organization:</strong> ${campaign.organization}</p>

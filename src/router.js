@@ -1,6 +1,7 @@
 import { renderDashboardPage } from "./pages/dashboard/dashboard.js";
 import { renderCampaignPage } from "./pages/campaign/campaign.js";
 import { renderIndexPage } from "./pages/index/index.js";
+import { renderProfilePage } from "./pages/profile/profile.js";
 import { renderAuthPage } from "./pages/auth/auth.js";
 
 const routes = {
@@ -9,6 +10,7 @@ const routes = {
   "/dashboard/admin": renderDashboardPage,
   "/dashboard/organizer": renderDashboardPage,
   "/dashboard/volunteer": renderDashboardPage,
+  "/profile": renderProfilePage,
   "/auth": (mountNode) => renderAuthPage(mountNode, { defaultTab: "login" }),
   "/login": (mountNode) => renderAuthPage(mountNode, { defaultTab: "login" }),
   "/register": (mountNode) => renderAuthPage(mountNode, { defaultTab: "register" }),

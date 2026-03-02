@@ -77,6 +77,16 @@ function hasAtLeastOneMatchingSkill(volunteerSkills = [], requiredSkills = []) {
   return requiredSkills.some((skill) => volunteerSkillSet.has(skill));
 }
 
+function getCampaignStatusMeta(status) {
+  if (status === "done") {
+    return { label: "ENDED", className: "is-ended" };
+  }
+  if (status === "paused") {
+    return { label: "PAUSED", className: "is-paused" };
+  }
+  return { label: "ONGOING", className: "is-ongoing" };
+}
+
 function setInlineMessage(element, message, type = "error") {
   if (!element) {
     return;
@@ -155,6 +165,7 @@ export async function renderCampaignPage(mountNode, params = {}) {
   const leaveCampaignBtn = mountNode.querySelector("#leaveCampaignBtn");
   const campaignAdminTools = mountNode.querySelector("#campaignAdminTools");
   const campaignInlineEditor = mountNode.querySelector("#campaignInlineEditor");
+  const pauseCampaignBtn = mountNode.querySelector("#pauseCampaignBtn");
   const toggleCampaignStatusBtn = mountNode.querySelector("#toggleCampaignStatusBtn");
   const deleteCampaignBtn = mountNode.querySelector("#deleteCampaignBtn");
   const assignVolunteerForm = mountNode.querySelector("#assignVolunteerForm");
@@ -501,10 +512,8 @@ export async function renderCampaignPage(mountNode, params = {}) {
 
     document.title = `${campaignData.title} - Volunteer Coordination Platform`;
     titleEl.textContent = campaignData.title;
-    const isEnded = campaignData.status === "done";
-    campaignStatus.innerHTML = `<strong>Campaign Status:</strong> <span class="campaign-overview-status ${
-      isEnded ? "is-ended" : "is-ongoing"
-    }">${isEnded ? "ENDED" : "ONGOING"}</span>`;
+    const statusMeta = getCampaignStatusMeta(campaignData.status);
+    campaignStatus.innerHTML = `<strong>Campaign Status:</strong> <span class="campaign-overview-status ${statusMeta.className}">${statusMeta.label}</span>`;
     orgEl.innerHTML = `<strong>Organization:</strong> ${campaignData.organization}`;
     locationEl.innerHTML = `<strong>Location:</strong> ${campaignData.location}`;
     datesEl.innerHTML = `<strong>Dates:</strong> ${formatDateTime(campaignData.start_at)} - ${formatDateTime(campaignData.end_at)}`;
@@ -524,6 +533,8 @@ export async function renderCampaignPage(mountNode, params = {}) {
 
     if (canManage) {
       renderInlineEditorRows();
+      pauseCampaignBtn.hidden = campaignData.status === "done";
+      pauseCampaignBtn.textContent = campaignData.status === "paused" ? "Resume Campaign" : "Pause Campaign";
       toggleCampaignStatusBtn.textContent = campaignData.status === "done" ? "Reopen Campaign" : "Mark Campaign Done";
 
       const { data: volunteerDirectory } = await getVolunteerDirectory();
@@ -553,7 +564,7 @@ export async function renderCampaignPage(mountNode, params = {}) {
       cancelActiveInlineEdit = null;
     }
 
-    volunteerActions.hidden = !canVolunteerParticipate || campaignData.status === "done";
+    volunteerActions.hidden = !canVolunteerParticipate || campaignData.status !== "published";
 
     if (!volunteerActions.hidden) {
       const { data: joinedCampaignIds } = await getJoinedCampaignIds();
@@ -662,6 +673,22 @@ export async function renderCampaignPage(mountNode, params = {}) {
     }
 
     const nextStatus = campaignData.status === "done" ? "published" : "done";
+    const { error } = await setCampaignStatus(campaignId, nextStatus);
+    if (error) {
+      setInlineMessage(campaignActionMessage, error.message || "Unable to update campaign status.");
+      return;
+    }
+
+    setInlineMessage(campaignActionMessage, "Campaign status updated.", "success");
+    await loadCampaign();
+  });
+
+  pauseCampaignBtn.addEventListener("click", async () => {
+    if (!campaignData || campaignData.status === "done") {
+      return;
+    }
+
+    const nextStatus = campaignData.status === "paused" ? "published" : "paused";
     const { error } = await setCampaignStatus(campaignId, nextStatus);
     if (error) {
       setInlineMessage(campaignActionMessage, error.message || "Unable to update campaign status.");

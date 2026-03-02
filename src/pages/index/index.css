@@ -156,6 +156,12 @@
   color: #0c6a2e;
 }
 
+.public-campaign-state.is-paused {
+  background: #fff6dc;
+  border: 1px solid #e9d6a2;
+  color: #8a6400;
+}
+
 .public-campaign-state.is-ended {
   background: #ffe4e4;
   border: 1px solid #f1b3b3;
