@@ -5,15 +5,10 @@ import { getAuthRole, getCurrentUser, getDashboardPathForRole, signOut } from ".
 export async function renderHeader(activePage) {
   const wrapper = document.createElement("div");
   wrapper.innerHTML = headerHtml;
-  const profileLink = wrapper.querySelector('[data-nav="profile"]');
 
   const activeLink = wrapper.querySelector(`[data-nav="${activePage}"]`);
   if (activeLink) {
     activeLink.classList.add("active");
-  }
-
-  if (profileLink) {
-    profileLink.hidden = activePage === "home";
   }
 
   // Check authentication status

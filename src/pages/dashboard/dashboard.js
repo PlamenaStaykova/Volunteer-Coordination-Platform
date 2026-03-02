@@ -62,6 +62,20 @@ function toDateInputValue(value) {
   return `${year}-${month}-${day}`;
 }
 
+function getEmptyStateMessage(filter, organizerView = false) {
+  if (filter === "ongoing") {
+    return "No ongoing campaigns.";
+  }
+  if (filter === "paused") {
+    return "No paused campaigns.";
+  }
+  if (filter === "ended") {
+    return "No ended campaigns.";
+  }
+
+  return organizerView ? "No campaigns created yet." : "No campaigns found for this filter.";
+}
+
 function getCampaignStateMeta(state) {
   if (state === "done") {
     return { label: "Done", className: "is-done" };
@@ -96,6 +110,10 @@ function getFilterPredicate(filter, context = {}) {
     return (campaign) => campaign.state === "done";
   }
   return () => true;
+}
+
+function toFilterCountLabel(baseLabel, count) {
+  return `${baseLabel} (${count})`;
 }
 
 function setInlineMessage(element, message, type = "error") {
@@ -146,6 +164,7 @@ function renderCampaignList(campaigns, mountNode, context) {
   campaignList.innerHTML = "";
 
   if (campaigns.length === 0) {
+    campaignEmptyState.textContent = getEmptyStateMessage(context.activeFilter);
     campaignEmptyState.hidden = false;
     return;
   }
@@ -249,13 +268,11 @@ export async function renderDashboardPage(mountNode) {
   pageContainer.innerHTML = pageHtml;
   mountNode.append(pageContainer.firstElementChild);
 
-  const activeCampaignsCount = mountNode.querySelector("#activeCampaignsCount");
-  const allCampaignsCount = mountNode.querySelector("#allCampaignsCount");
   const dashboardError = mountNode.querySelector("#dashboardError");
   const dashboardFiltersSection = mountNode.querySelector(".dashboard-filters");
   const campaignListSection = mountNode.querySelector(".campaign-list-section");
   const createCampaignHeroLink = mountNode.querySelector("#createCampaignHeroLink");
-  const filterTabs = mountNode.querySelectorAll(".filter-tab");
+  const filterTabs = [...mountNode.querySelectorAll(".filter-tab")];
   const volunteerMyCampaignsTab = mountNode.querySelector("#volunteerMyCampaignsTab");
   const adminPanel = mountNode.querySelector("#adminPanel");
   const organizerToolsFilters = mountNode.querySelector("#organizerToolsFilters");
@@ -315,6 +332,18 @@ export async function renderDashboardPage(mountNode) {
   let adminUsers = [];
   let homeGalleryImages = [];
   let activeFilter = "total";
+  const filterTabsByFilter = new Map();
+
+  for (const tab of filterTabs) {
+    const filterKey = tab.dataset.filter || "total";
+    const baseLabel = tab.textContent.trim().replace(/\s+\(\d+\)\s*$/, "");
+    tab.dataset.baseLabel = baseLabel;
+
+    if (!filterTabsByFilter.has(filterKey)) {
+      filterTabsByFilter.set(filterKey, []);
+    }
+    filterTabsByFilter.get(filterKey).push(tab);
+  }
 
   const normalizeVolunteerSkills = (skills = []) => {
     const unique = new Set();
@@ -325,6 +354,49 @@ export async function renderDashboardPage(mountNode) {
       }
     }
     return [...unique];
+  };
+
+  const setFilterCounter = (filterKey, count) => {
+    const tabsForFilter = filterTabsByFilter.get(filterKey) ?? [];
+    for (const tab of tabsForFilter) {
+      const baseLabel = tab.dataset.baseLabel || tab.textContent.trim().replace(/\s+\(\d+\)\s*$/, "");
+      tab.textContent = toFilterCountLabel(baseLabel, count);
+    }
+  };
+
+  const getVisibleCampaigns = () => {
+    const organizerOwnedCampaignIds = new Set(organizerCampaigns.map((campaign) => campaign.id));
+    return userType === "organizer" && !isAdmin
+      ? allCampaigns.filter((campaign) => organizerOwnedCampaignIds.has(campaign.id))
+      : allCampaigns;
+  };
+
+  const updateFilterCounters = () => {
+    if (canManageCampaigns) {
+      const total = organizerCampaigns.length;
+      const ongoing = organizerCampaigns.filter((campaign) => campaign.status === "published").length;
+      const paused = organizerCampaigns.filter((campaign) => campaign.status === "paused").length;
+      const ended = organizerCampaigns.filter((campaign) => campaign.status === "done").length;
+
+      setFilterCounter("total", total);
+      setFilterCounter("ongoing", ongoing);
+      setFilterCounter("paused", paused);
+      setFilterCounter("ended", ended);
+      return;
+    }
+
+    const visibleCampaigns = getVisibleCampaigns();
+    const total = visibleCampaigns.length;
+    const ongoing = visibleCampaigns.filter((campaign) => campaign.state === "open").length;
+    const paused = visibleCampaigns.filter((campaign) => campaign.state === "paused").length;
+    const ended = visibleCampaigns.filter((campaign) => campaign.state === "done").length;
+    const myCampaigns = visibleCampaigns.filter((campaign) => volunteerCampaignIds.has(campaign.id)).length;
+
+    setFilterCounter("total", total);
+    setFilterCounter("ongoing", ongoing);
+    setFilterCounter("paused", paused);
+    setFilterCounter("ended", ended);
+    setFilterCounter("my-campaigns", myCampaigns);
   };
 
   const renderHomeGalleryAdminList = () => {
@@ -537,6 +609,7 @@ export async function renderDashboardPage(mountNode) {
       .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
 
     if (!canManageCampaigns || filteredOrganizerCampaigns.length === 0) {
+      organizerCampaignEmpty.textContent = getEmptyStateMessage(activeFilter, true);
       organizerCampaignEmpty.hidden = !canManageCampaigns;
       return;
     }
@@ -714,11 +787,7 @@ export async function renderDashboardPage(mountNode) {
   };
 
   const applyFilter = () => {
-    const organizerOwnedCampaignIds = new Set(organizerCampaigns.map((campaign) => campaign.id));
-    const visibleCampaigns =
-      userType === "organizer" && !isAdmin
-        ? allCampaigns.filter((campaign) => organizerOwnedCampaignIds.has(campaign.id))
-        : allCampaigns;
+    const visibleCampaigns = getVisibleCampaigns();
 
     const predicate = getFilterPredicate(activeFilter, { volunteerCampaignIds });
     const filteredCampaigns = visibleCampaigns
@@ -727,6 +796,7 @@ export async function renderDashboardPage(mountNode) {
     renderCampaignList(filteredCampaigns, mountNode, {
       userType,
       isAdmin,
+      activeFilter,
       useApplicationLabels: activeFilter === "ongoing" || activeFilter === "my-campaigns",
       joinedCampaignIds,
       onJoinCampaign: async (campaignId) => {
@@ -761,24 +831,15 @@ export async function renderDashboardPage(mountNode) {
     if (error) {
       dashboardError.hidden = false;
       dashboardError.textContent = error.message || "Unable to load campaigns right now.";
-      activeCampaignsCount.textContent = "0";
-      allCampaignsCount.textContent = "0";
       allCampaigns = [];
+      updateFilterCounters();
       applyFilter();
       return;
     }
 
     dashboardError.hidden = true;
     allCampaigns = data;
-    const organizerOwnedCampaignIds = new Set(organizerCampaigns.map((campaign) => campaign.id));
-    const visibleCampaigns =
-      userType === "organizer" && !isAdmin
-        ? allCampaigns.filter((campaign) => organizerOwnedCampaignIds.has(campaign.id))
-        : allCampaigns;
-    activeCampaignsCount.textContent = String(
-      visibleCampaigns.filter((campaign) => campaign.state === "open").length
-    );
-    allCampaignsCount.textContent = String(visibleCampaigns.length);
+    updateFilterCounters();
     applyFilter();
   };
 
@@ -805,6 +866,7 @@ export async function renderDashboardPage(mountNode) {
       dashboardError.textContent =
         participationResult.error.message || "Unable to load your campaign participation.";
       volunteerCampaignIds = new Set(joinedCampaignIds);
+      updateFilterCounters();
       return;
     }
 
@@ -812,6 +874,7 @@ export async function renderDashboardPage(mountNode) {
     for (const joinedId of joinedCampaignIds) {
       volunteerCampaignIds.add(joinedId);
     }
+    updateFilterCounters();
   };
 
   const loadOrganizerData = async () => {
@@ -848,6 +911,7 @@ export async function renderDashboardPage(mountNode) {
       setInlineMessage(adminActionMessage, "");
     }
 
+    updateFilterCounters();
     renderOrganizerCampaigns();
   };
 
@@ -909,6 +973,7 @@ export async function renderDashboardPage(mountNode) {
     });
   }
 
+  updateFilterCounters();
   await loadVolunteerData();
   await loadOrganizerData();
   await loadHomeGalleryData();

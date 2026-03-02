@@ -146,32 +146,6 @@
   justify-self: start;
 }
 
-.dashboard-stats {
-  margin-top: 1.25rem;
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.stat-card {
-  background: #fff;
-  border: 1px solid #dce3eb;
-  border-radius: 10px;
-  padding: 1rem;
-}
-
-.stat-card h2 {
-  margin: 0;
-  font-size: 1rem;
-  color: #30445c;
-}
-
-.stat-value {
-  margin: 0.35rem 0 0;
-  font-size: 2rem;
-  font-weight: 700;
-}
-
 .dashboard-filters {
   margin-top: 1rem;
 }
@@ -599,10 +573,6 @@
   }
 
   .user-admin-edit {
-    grid-template-columns: 1fr;
-  }
-
-  .dashboard-stats {
     grid-template-columns: 1fr;
   }
 
