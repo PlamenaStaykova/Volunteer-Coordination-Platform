@@ -1,5 +1,44 @@
 <main class="page page-campaign">
   <div class="container page-inner">
+    <section id="campaignCreate" class="campaign-create" hidden>
+      <p class="campaign-back-link"><a href="/dashboard">Back to Dashboard</a></p>
+      <h1>Create Campaign</h1>
+      <p>Set campaign details, select required skills, then invite volunteers from the same page.</p>
+      <form id="createCampaignForm" class="admin-form">
+        <label>
+          Title
+          <input id="createTitle" type="text" required />
+        </label>
+        <label>
+          Description
+          <textarea id="createDescription" rows="3" required></textarea>
+        </label>
+        <label>
+          Location
+          <input id="createLocation" type="text" required />
+        </label>
+        <label>
+          Start
+          <input id="createStartAt" type="date" required />
+        </label>
+        <label>
+          End
+          <input id="createEndAt" type="date" required />
+        </label>
+        <label>
+          Max Volunteers
+          <input id="createCapacity" type="number" min="1" value="10" required />
+        </label>
+        <div class="required-skills-block">
+          <p class="skills-title">Required Skills</p>
+          <p class="skills-help">Select skills needed for this campaign.</p>
+          <div id="createCampaignSkillsGrid" class="skills-grid"></div>
+        </div>
+        <button class="btn" type="submit">Create Campaign</button>
+      </form>
+      <p id="createCampaignMessage" class="inline-message" hidden></p>
+    </section>
+
     <section id="campaignDetail" class="campaign-detail" hidden>
       <p class="campaign-back-link"><a href="/dashboard">Back to Dashboard</a></p>
       <h1 id="campaignTitle"></h1>
@@ -7,6 +46,7 @@
       <p id="campaignOrg" class="campaign-detail-meta"></p>
       <p id="campaignLocation" class="campaign-detail-meta"></p>
       <p id="campaignDates" class="campaign-detail-meta"></p>
+      <p id="campaignSkills" class="campaign-detail-meta"></p>
       <p id="campaignDescription" class="campaign-description"></p>
       <div class="campaign-detail-metrics">
         <p><strong>Max Volunteers:</strong> <span id="campaignMaxVolunteers"></span></p>
@@ -37,13 +77,13 @@
       </article>
 
       <article class="admin-card">
-        <h3>Assign Volunteer</h3>
+        <h3>Invite Volunteer</h3>
         <form id="assignVolunteerForm" class="admin-form compact-admin-form">
           <label>
-            Volunteer
+            Eligible Volunteer
             <select id="assignVolunteerSelect" required></select>
           </label>
-          <button class="btn btn-small" type="submit">Assign Volunteer</button>
+          <button class="btn btn-small" type="submit">Invite Volunteer</button>
         </form>
       </article>
 

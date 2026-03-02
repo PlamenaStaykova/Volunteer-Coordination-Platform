@@ -5,6 +5,18 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const hasSupabaseConfig = Boolean(supabaseUrl && supabaseKey);
 const missingConfigMessage =
   "Missing Supabase credentials. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.";
+const ALLOWED_VOLUNTEER_SKILLS = [
+  "Time Management",
+  "First Aid",
+  "Communication",
+  "Teamwork",
+  "Event Planning",
+  "Child Care",
+  "Elderly Care",
+  "Fundraising",
+  "Logistics Coordination",
+  "Public Speaking",
+];
 
 if (!hasSupabaseConfig) {
   console.warn(missingConfigMessage);
@@ -238,6 +250,17 @@ function normalizeAuthRole(value) {
   }
 
   return null;
+}
+
+function normalizeSkills(skills = []) {
+  const unique = new Set();
+  for (const skill of Array.isArray(skills) ? skills : []) {
+    const normalized = String(skill || "").trim();
+    if (ALLOWED_VOLUNTEER_SKILLS.includes(normalized)) {
+      unique.add(normalized);
+    }
+  }
+  return [...unique];
 }
 
 const profileSelectColumns = [
@@ -572,7 +595,7 @@ export async function getOrganizerCampaigns() {
 
   const { data, error } = await supabase
     .from("events")
-    .select("id, title, description, location, start_at, end_at, status, created_at")
+    .select("id, title, description, location, start_at, end_at, status, required_skills, created_at")
     .eq("created_by", user.id)
     .order("created_at", { ascending: false });
 
@@ -586,7 +609,7 @@ export async function getCampaignById(campaignId) {
 
   const { data: event, error: eventError } = await supabase
     .from("events")
-    .select("id, title, description, location, start_at, end_at, status, created_by, created_at")
+    .select("id, title, description, location, start_at, end_at, status, required_skills, created_by, created_at")
     .eq("id", campaignId)
     .maybeSingle();
 
@@ -666,6 +689,7 @@ export async function createCampaignWithShift(payload) {
     location: payload.location,
     start_at: payload.start_at,
     end_at: payload.end_at,
+    required_skills: normalizeSkills(payload.required_skills),
     created_by: user.id,
     status: "published",
   };
@@ -701,15 +725,20 @@ export async function updateCampaignWithShift(campaignId, payload) {
     return { data: null, error: new Error(missingConfigMessage) };
   }
 
+  const eventUpdate = {
+    title: payload.title,
+    description: payload.description,
+    location: payload.location,
+    start_at: payload.start_at,
+    end_at: payload.end_at,
+  };
+  if (Array.isArray(payload.required_skills)) {
+    eventUpdate.required_skills = normalizeSkills(payload.required_skills);
+  }
+
   const { data: updatedEvent, error: eventError } = await supabase
     .from("events")
-    .update({
-      title: payload.title,
-      description: payload.description,
-      location: payload.location,
-      start_at: payload.start_at,
-      end_at: payload.end_at,
-    })
+    .update(eventUpdate)
     .eq("id", campaignId)
     .select("id")
     .single();
@@ -751,6 +780,22 @@ export async function updateCampaignWithShift(campaignId, payload) {
   }
 
   return { data: updatedEvent, error: null };
+}
+
+export async function updateCampaignRequiredSkills(campaignId, requiredSkills = []) {
+  if (!supabase) {
+    return { data: null, error: new Error(missingConfigMessage) };
+  }
+
+  const normalizedSkills = normalizeSkills(requiredSkills);
+  const { data, error } = await supabase
+    .from("events")
+    .update({ required_skills: normalizedSkills })
+    .eq("id", campaignId)
+    .select("id, required_skills")
+    .single();
+
+  return { data, error };
 }
 
 export async function setCampaignStatus(campaignId, status) {
@@ -852,7 +897,7 @@ export async function getVolunteerDirectory() {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, display_name, user_type")
+    .select("id, display_name, user_type, volunteer_skills")
     .eq("user_type", "volunteer")
     .order("display_name", { ascending: true });
 
@@ -866,7 +911,7 @@ export async function assignVolunteerToCampaign(campaignId, volunteerId) {
 
   const { data: volunteerProfile, error: volunteerLookupError } = await supabase
     .from("profiles")
-    .select("id, user_type")
+    .select("id, user_type, volunteer_skills")
     .eq("id", volunteerId)
     .maybeSingle();
 
@@ -875,7 +920,28 @@ export async function assignVolunteerToCampaign(campaignId, volunteerId) {
   }
 
   if (!volunteerProfile || normalizeUserType(volunteerProfile.user_type) !== "volunteer") {
-    return { error: new Error("Only volunteer users can be assigned to a campaign.") };
+    return { error: new Error("Only volunteer users can be invited to a campaign.") };
+  }
+
+  const { data: event, error: eventLookupError } = await supabase
+    .from("events")
+    .select("id, required_skills")
+    .eq("id", campaignId)
+    .maybeSingle();
+
+  if (eventLookupError) {
+    return { error: eventLookupError };
+  }
+
+  const requiredSkills = normalizeSkills(event?.required_skills);
+  const volunteerSkills = normalizeSkills(volunteerProfile?.volunteer_skills);
+  if (requiredSkills.length > 0) {
+    const hasMatchingSkill = volunteerSkills.some((skill) => requiredSkills.includes(skill));
+    if (!hasMatchingSkill) {
+      return {
+        error: new Error("Volunteer does not match campaign required skills."),
+      };
+    }
   }
 
   const { data: primaryShift, error: shiftError } = await getPrimaryShiftForCampaign(campaignId);

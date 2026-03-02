@@ -24,6 +24,11 @@ function normalizePath(pathname) {
 
 export async function initRouter(mountNode) {
   const pathname = normalizePath(window.location.pathname);
+  if (pathname === "/campaign/new") {
+    await renderCampaignPage(mountNode, { mode: "new" });
+    return;
+  }
+
   const campaignMatch = pathname.match(/^\/campaign\/([0-9a-fA-F-]+)$/);
 
   if (campaignMatch) {

@@ -73,41 +73,15 @@
 
     <section id="adminPanel" class="admin-panel" hidden>
       <div class="admin-panel-header">
-        <h2>Admin / Organizer Tools</h2>
+        <h2>Organizer Tools</h2>
         <p>Create, update, close, delete campaigns and manage volunteers.</p>
       </div>
 
       <div class="admin-grid">
         <article class="admin-card">
           <h3>Create Campaign</h3>
-          <form id="createCampaignForm" class="admin-form">
-            <label>
-              Title
-              <input id="createTitle" type="text" required />
-            </label>
-            <label>
-              Description
-              <textarea id="createDescription" rows="3" required></textarea>
-            </label>
-            <label>
-              Location
-              <input id="createLocation" type="text" required />
-            </label>
-            <label>
-              Start
-              <input id="createStartAt" type="date" required />
-            </label>
-            <label>
-              End
-              <input id="createEndAt" type="date" required />
-            </label>
-            <label>
-              Max Volunteers
-              <input id="createCapacity" type="number" min="1" value="10" required />
-            </label>
-            <button class="btn" type="submit">Create Campaign</button>
-          </form>
-          <p id="createCampaignMessage" class="inline-message" hidden></p>
+          <p>Open the campaign creation page to define details, required skills, and invitations in one place.</p>
+          <a class="btn create-campaign-link" href="/campaign/new">Create Campaign</a>
         </article>
       </div>
       <p id="adminActionMessage" class="inline-message" hidden></p>
@@ -119,17 +93,26 @@
       </article>
 
       <article class="admin-card admin-list-card">
-        <h3>Campaign Applications</h3>
-        <form id="assignVolunteerForm" class="admin-form compact-admin-form">
+        <h3>Campaign Invitations</h3>
+        <form id="assignVolunteerForm" class="admin-form compact-admin-form campaign-invite-form">
           <label>
             Campaign
             <select id="assignCampaignSelect" required></select>
           </label>
+          <div class="required-skills-block">
+            <p class="skills-title">Required Skills</p>
+            <p id="campaignRequiredSkillsLine" class="skills-selected-line">Required: None</p>
+            <p class="skills-help">Select required skills for this campaign.</p>
+            <div id="campaignSkillsGrid" class="skills-grid"></div>
+            <button id="saveCampaignSkillsButton" class="btn btn-small btn-neutral" type="button">
+              Save Required Skills
+            </button>
+          </div>
           <label>
-            Volunteer
+            Eligible Volunteer
             <select id="assignVolunteerSelect" required></select>
           </label>
-          <button class="btn btn-small" type="submit">Assign Volunteer</button>
+          <button class="btn btn-small" type="submit">Invite Volunteer</button>
         </form>
         <p id="assignVolunteerMessage" class="inline-message" hidden></p>
         <p id="applicationsHint" class="admin-hint">Select "View Volunteers" from a campaign above.</p>

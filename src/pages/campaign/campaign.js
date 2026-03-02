@@ -4,6 +4,7 @@ import { renderHeader } from "../../components/header/header.js";
 import { renderFooter } from "../../components/footer/footer.js";
 import { requireAuth } from "../../lib/guards.js";
 import {
+  createCampaignWithShift,
   assignVolunteerToCampaign,
   cancelCampaignApplication,
   deleteCampaign,
@@ -18,6 +19,19 @@ import {
   setCampaignStatus,
   updateCampaignWithShift,
 } from "../../lib/supabase.js";
+
+const VOLUNTEER_SKILLS = [
+  "Time Management",
+  "First Aid",
+  "Communication",
+  "Teamwork",
+  "Event Planning",
+  "Child Care",
+  "Elderly Care",
+  "Fundraising",
+  "Logistics Coordination",
+  "Public Speaking",
+];
 
 function formatDateTime(value) {
   const date = new Date(value);
@@ -41,6 +55,26 @@ function toDateInputValue(value) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function normalizeSkillValues(skills = []) {
+  const unique = new Set();
+  for (const skill of Array.isArray(skills) ? skills : []) {
+    const normalized = String(skill || "").trim();
+    if (VOLUNTEER_SKILLS.includes(normalized)) {
+      unique.add(normalized);
+    }
+  }
+  return [...unique];
+}
+
+function hasAtLeastOneMatchingSkill(volunteerSkills = [], requiredSkills = []) {
+  if (requiredSkills.length === 0) {
+    return true;
+  }
+
+  const volunteerSkillSet = new Set(normalizeSkillValues(volunteerSkills));
+  return requiredSkills.some((skill) => volunteerSkillSet.has(skill));
 }
 
 function setInlineMessage(element, message, type = "error") {
@@ -89,7 +123,8 @@ export async function renderCampaignPage(mountNode, params = {}) {
     return;
   }
 
-  const campaignId = params.id || "";
+  let campaignId = params.id || "";
+  let isCreateMode = params.mode === "new";
   document.title = "Campaign - Volunteer Coordination Platform";
 
   mountNode.innerHTML = "";
@@ -99,6 +134,10 @@ export async function renderCampaignPage(mountNode, params = {}) {
   pageContainer.innerHTML = pageHtml;
   mountNode.append(pageContainer.firstElementChild);
 
+  const campaignCreate = mountNode.querySelector("#campaignCreate");
+  const createCampaignForm = mountNode.querySelector("#createCampaignForm");
+  const createCampaignMessage = mountNode.querySelector("#createCampaignMessage");
+  const createCampaignSkillsGrid = mountNode.querySelector("#createCampaignSkillsGrid");
   const campaignDetail = mountNode.querySelector("#campaignDetail");
   const campaignStatus = mountNode.querySelector("#campaignStatus");
   const campaignMissing = mountNode.querySelector("#campaignMissing");
@@ -106,6 +145,7 @@ export async function renderCampaignPage(mountNode, params = {}) {
   const orgEl = mountNode.querySelector("#campaignOrg");
   const locationEl = mountNode.querySelector("#campaignLocation");
   const datesEl = mountNode.querySelector("#campaignDates");
+  const skillsEl = mountNode.querySelector("#campaignSkills");
   const descriptionEl = mountNode.querySelector("#campaignDescription");
   const maxVolunteersEl = mountNode.querySelector("#campaignMaxVolunteers");
   const vacanciesEl = mountNode.querySelector("#campaignVacancies");
@@ -124,6 +164,7 @@ export async function renderCampaignPage(mountNode, params = {}) {
 
   const [userType, isAdmin] = await Promise.all([getUserType(user), getIsAdmin(user)]);
   const canVolunteerParticipate = userType === "volunteer" || isAdmin;
+  const canManageCampaigns = userType === "organizer" || isAdmin;
   let campaignData = null;
   let cancelActiveInlineEdit = null;
 
@@ -170,6 +211,34 @@ export async function renderCampaignPage(mountNode, params = {}) {
       item.append(removeButton);
       applicationsList.append(item);
     }
+  };
+
+  const renderCreateSkillOptions = () => {
+    if (!createCampaignSkillsGrid) {
+      return;
+    }
+
+    createCampaignSkillsGrid.innerHTML = "";
+    for (const skill of VOLUNTEER_SKILLS) {
+      const label = document.createElement("label");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.name = "createCampaignRequiredSkills";
+      checkbox.value = skill;
+      label.append(checkbox, document.createTextNode(skill));
+      createCampaignSkillsGrid.append(label);
+    }
+  };
+
+  const getCreateCampaignRequiredSkills = () => {
+    if (!createCampaignSkillsGrid) {
+      return [];
+    }
+    return normalizeSkillValues(
+      [...createCampaignSkillsGrid.querySelectorAll('input[name="createCampaignRequiredSkills"]:checked')].map(
+        (input) => input.value
+      )
+    );
   };
 
   const getInlineFieldDefinitions = () => [
@@ -412,6 +481,13 @@ export async function renderCampaignPage(mountNode, params = {}) {
   };
 
   const loadCampaign = async () => {
+    if (!campaignId) {
+      campaignMissing.hidden = true;
+      campaignDetail.hidden = true;
+      campaignAdminTools.hidden = true;
+      return false;
+    }
+
     const { data, error } = await getCampaignById(campaignId);
     if (error || !data) {
       campaignMissing.hidden = false;
@@ -432,6 +508,12 @@ export async function renderCampaignPage(mountNode, params = {}) {
     orgEl.innerHTML = `<strong>Organization:</strong> ${campaignData.organization}`;
     locationEl.innerHTML = `<strong>Location:</strong> ${campaignData.location}`;
     datesEl.innerHTML = `<strong>Dates:</strong> ${formatDateTime(campaignData.start_at)} - ${formatDateTime(campaignData.end_at)}`;
+    const requiredSkills = normalizeSkillValues(campaignData.required_skills || []);
+    skillsEl.innerHTML = `<strong>Required Skills:</strong> ${
+      requiredSkills.length > 0
+        ? requiredSkills.join(", ")
+        : "No specific skills are required for this campaign. All volunteers can be invited."
+    }`;
     descriptionEl.textContent = campaignData.description;
     maxVolunteersEl.textContent = String(campaignData.max_volunteers);
     vacanciesEl.textContent = String(campaignData.vacancies);
@@ -445,11 +527,23 @@ export async function renderCampaignPage(mountNode, params = {}) {
       toggleCampaignStatusBtn.textContent = campaignData.status === "done" ? "Reopen Campaign" : "Mark Campaign Done";
 
       const { data: volunteerDirectory } = await getVolunteerDirectory();
+      const eligibleVolunteers = (volunteerDirectory ?? []).filter((volunteer) =>
+        hasAtLeastOneMatchingSkill(volunteer.volunteer_skills || [], requiredSkills)
+      );
       assignVolunteerSelect.innerHTML = "";
-      for (const volunteer of volunteerDirectory ?? []) {
+      for (const volunteer of eligibleVolunteers) {
         const option = document.createElement("option");
         option.value = volunteer.id;
         option.textContent = volunteer.display_name;
+        assignVolunteerSelect.append(option);
+      }
+      if (eligibleVolunteers.length === 0) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent =
+          requiredSkills.length > 0
+            ? "No volunteers match the required skills"
+            : "No volunteers available";
         assignVolunteerSelect.append(option);
       }
 
@@ -476,6 +570,59 @@ export async function renderCampaignPage(mountNode, params = {}) {
 
     return true;
   };
+
+  if (isCreateMode) {
+    if (!canManageCampaigns) {
+      window.location.href = "/dashboard";
+      return;
+    }
+
+    campaignCreate.hidden = false;
+    campaignDetail.hidden = true;
+    campaignAdminTools.hidden = true;
+    campaignMissing.hidden = true;
+    renderCreateSkillOptions();
+
+    createCampaignForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const payload = toCampaignPayloadFromForm({
+        title: mountNode.querySelector("#createTitle").value,
+        description: mountNode.querySelector("#createDescription").value,
+        location: mountNode.querySelector("#createLocation").value,
+        startAt: mountNode.querySelector("#createStartAt").value,
+        endAt: mountNode.querySelector("#createEndAt").value,
+        capacity: mountNode.querySelector("#createCapacity").value,
+      });
+
+      if (!payload || payload.capacity <= 0 || payload.end_at <= payload.start_at) {
+        setInlineMessage(createCampaignMessage, "Provide valid dates and capacity.", "error");
+        return;
+      }
+
+      payload.required_skills = getCreateCampaignRequiredSkills();
+      const { data, error } = await createCampaignWithShift(payload);
+      if (error) {
+        setInlineMessage(createCampaignMessage, error.message || "Unable to create campaign.");
+        return;
+      }
+
+      if (!data?.id) {
+        setInlineMessage(createCampaignMessage, "Unable to create campaign.");
+        return;
+      }
+
+      campaignId = data.id;
+      isCreateMode = false;
+      window.history.replaceState({}, "", `/campaign/${campaignId}`);
+      setInlineMessage(createCampaignMessage, "Campaign created successfully.", "success");
+      campaignCreate.hidden = true;
+      await loadCampaign();
+      setInlineMessage(campaignActionMessage, "Campaign created. You can invite volunteers below.", "success");
+    });
+  } else {
+    campaignCreate.hidden = true;
+  }
 
   joinCampaignBtn.addEventListener("click", async () => {
     if (!canVolunteerParticipate) {
@@ -544,23 +691,25 @@ export async function renderCampaignPage(mountNode, params = {}) {
     event.preventDefault();
     const volunteerId = assignVolunteerSelect.value;
     if (!volunteerId) {
-      setInlineMessage(campaignActionMessage, "Select a volunteer first.");
+      setInlineMessage(campaignActionMessage, "Select an eligible volunteer first.");
       return;
     }
 
     const { error } = await assignVolunteerToCampaign(campaignId, volunteerId);
     if (error) {
-      setInlineMessage(campaignActionMessage, error.message || "Unable to assign volunteer.");
+      setInlineMessage(campaignActionMessage, error.message || "Unable to invite volunteer.");
       return;
     }
 
-    setInlineMessage(campaignActionMessage, "Volunteer assigned.", "success");
+    setInlineMessage(campaignActionMessage, "Volunteer invited.", "success");
     await loadCampaign();
   });
 
-  const loaded = await loadCampaign();
-  if (!loaded) {
-    campaignMissing.hidden = false;
+  if (!isCreateMode) {
+    const loaded = await loadCampaign();
+    if (!loaded) {
+      campaignMissing.hidden = false;
+    }
   }
 
   mountNode.append(renderFooter());

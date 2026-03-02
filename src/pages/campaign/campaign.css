@@ -3,6 +3,7 @@
 }
 
 .campaign-detail,
+.campaign-create,
 .campaign-missing {
   background: #fff;
   border: 1px solid #dce3eb;
@@ -84,6 +85,7 @@
 }
 
 .campaign-actions[hidden],
+.campaign-create[hidden],
 .campaign-admin-tools[hidden],
 .campaign-detail[hidden],
 .campaign-missing[hidden] {
@@ -232,6 +234,46 @@
   font-size: 0.9rem;
 }
 
+.required-skills-block {
+  border: 1px solid #dce3eb;
+  border-radius: 8px;
+  background: #fbfdff;
+  padding: 0.65rem 0.7rem;
+}
+
+.skills-title {
+  margin: 0;
+  font-weight: 700;
+  color: #1c3b63;
+}
+
+.skills-help {
+  margin: 0.4rem 0 0;
+  color: #30445c;
+  font-size: 0.9rem;
+}
+
+.skills-grid {
+  margin-top: 0.55rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 0.8rem;
+}
+
+.skills-grid label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 500;
+  font-size: 0.92rem;
+  color: #20354d;
+}
+
+.skills-grid input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+}
+
 .admin-form input,
 .admin-form textarea,
 .admin-form select {
@@ -311,6 +353,10 @@
   }
 
   .compact-admin-form {
+    grid-template-columns: 1fr;
+  }
+
+  .skills-grid {
     grid-template-columns: 1fr;
   }
 }
