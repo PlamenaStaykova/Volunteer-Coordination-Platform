@@ -137,8 +137,31 @@ erDiagram
 - `supabase/seed.js` - sample users and campaigns seed script
 - `supabase/run-migrations.ps1` - helper script for Supabase migration push
 
+## Deployment (Netlify / Vercel)
+The repository now includes hosting config for both providers:
+- `netlify.toml` (Netlify build + SPA redirect)
+- `vercel.json` (Vercel SPA rewrite)
+
+### Netlify (recommended)
+1. Connect this GitHub repository in Netlify.
+2. Set build command: `npm run build`
+3. Set publish directory: `dist`
+4. Add environment variables:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+5. Deploy.
+
+### Vercel
+1. Import this repository in Vercel.
+2. Framework preset: `Vite` (or leave auto-detected).
+3. Add environment variables:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+4. Deploy.
+
 ## Live Deployment URL
-- Not configured in this repository yet. Add your production URL here after deployment.
+- Netlify: `https://<your-site-name>.netlify.app`
+- Vercel: `https://<your-project>.vercel.app`
 
 ## Demo Credentials
 For local/demo environments only:
