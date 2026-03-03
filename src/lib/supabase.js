@@ -17,6 +17,9 @@ const ALLOWED_VOLUNTEER_SKILLS = [
   "Logistics Coordination",
   "Public Speaking",
 ];
+const PROFILE_AVATAR_BUCKET = "attendance-proofs";
+const PROFILE_AVATAR_MAX_SIZE_BYTES = 5 * 1024 * 1024;
+const PROFILE_AVATAR_SIGNED_URL_TTL_SECONDS = 60 * 60;
 
 if (!hasSupabaseConfig) {
   console.warn(missingConfigMessage);
@@ -154,6 +157,14 @@ export async function getHomeGalleryImages() {
   return { data: data ?? [], error };
 }
 
+function sanitizeStorageFileName(fileName, fallbackName = "file") {
+  const normalized = String(fileName || "").replace(/[^a-zA-Z0-9._-]/g, "_");
+  if (!normalized) {
+    return fallbackName;
+  }
+  return normalized;
+}
+
 export async function uploadHomeGalleryImage(file, title = "", sortOrder = 0) {
   if (!supabase) {
     return { data: null, error: new Error(missingConfigMessage) };
@@ -214,6 +225,165 @@ export async function deleteHomeGalleryImage(imageId, imagePath) {
   }
 
   return { error: null };
+}
+
+export async function getProfileAvatarSignedUrl(avatarPath, expiresIn = PROFILE_AVATAR_SIGNED_URL_TTL_SECONDS) {
+  if (!supabase) {
+    return { data: null, error: new Error(missingConfigMessage) };
+  }
+
+  const normalizedPath = String(avatarPath || "").trim();
+  if (!normalizedPath) {
+    return { data: null, error: new Error("Avatar path is required.") };
+  }
+  if (/^https?:\/\//i.test(normalizedPath)) {
+    return {
+      data: {
+        path: normalizedPath,
+        signedUrl: normalizedPath,
+      },
+      error: null,
+    };
+  }
+
+  const { data, error } = await supabase.storage
+    .from(PROFILE_AVATAR_BUCKET)
+    .createSignedUrl(normalizedPath, expiresIn);
+
+  if (error) {
+    return { data: null, error };
+  }
+
+  return {
+    data: {
+      path: normalizedPath,
+      signedUrl: data?.signedUrl || "",
+    },
+    error: null,
+  };
+}
+
+export async function uploadProfileAvatar(file, user = null) {
+  if (!supabase) {
+    return { data: null, error: new Error(missingConfigMessage) };
+  }
+
+  const currentUser = user || (await getCurrentUser());
+  if (!currentUser) {
+    return { data: null, error: new Error("User not authenticated.") };
+  }
+
+  if (!file) {
+    return { data: null, error: new Error("Please select an image file.") };
+  }
+
+  const fileType = String(file?.type || "").toLowerCase();
+  if (!fileType.startsWith("image/")) {
+    return { data: null, error: new Error("Only image files are allowed.") };
+  }
+
+  const fileSize = Number(file?.size || 0);
+  if (fileSize > PROFILE_AVATAR_MAX_SIZE_BYTES) {
+    return {
+      data: null,
+      error: new Error("Avatar image is too large. Maximum size is 5 MB."),
+    };
+  }
+
+  const { data: profileRow, error: profileLookupError } = await supabase
+    .from("profiles")
+    .select("avatar_url")
+    .eq("id", currentUser.id)
+    .maybeSingle();
+  if (profileLookupError) {
+    return { data: null, error: profileLookupError };
+  }
+
+  const previousAvatarPath = String(profileRow?.avatar_url || "").trim();
+  const originalName = sanitizeStorageFileName(file?.name || "avatar");
+  const fileExt = originalName.includes(".") ? originalName.split(".").pop() : "";
+  const avatarFileName = fileExt ? `avatar-${Date.now()}.${fileExt}` : `avatar-${Date.now()}`;
+  const avatarPath = `${currentUser.id}/${avatarFileName}`;
+
+  const { error: uploadError } = await supabase.storage.from(PROFILE_AVATAR_BUCKET).upload(avatarPath, file, {
+    upsert: true,
+    contentType: fileType || "application/octet-stream",
+  });
+  if (uploadError) {
+    return { data: null, error: uploadError };
+  }
+
+  const { data: updatedProfile, error: profileUpdateError } = await supabase
+    .from("profiles")
+    .update({ avatar_url: avatarPath })
+    .eq("id", currentUser.id)
+    .select("id, avatar_url")
+    .single();
+
+  if (profileUpdateError) {
+    await supabase.storage.from(PROFILE_AVATAR_BUCKET).remove([avatarPath]);
+    return { data: null, error: profileUpdateError };
+  }
+
+  if (previousAvatarPath && !/^https?:\/\//i.test(previousAvatarPath) && previousAvatarPath !== avatarPath) {
+    await supabase.storage.from(PROFILE_AVATAR_BUCKET).remove([previousAvatarPath]);
+  }
+
+  const { data: signedUrlData } = await getProfileAvatarSignedUrl(avatarPath);
+
+  return {
+    data: {
+      avatar_path: updatedProfile?.avatar_url || avatarPath,
+      avatar_url: signedUrlData?.signedUrl || "",
+    },
+    error: null,
+  };
+}
+
+export async function deleteProfileAvatar(user = null) {
+  if (!supabase) {
+    return { data: null, error: new Error(missingConfigMessage) };
+  }
+
+  const currentUser = user || (await getCurrentUser());
+  if (!currentUser) {
+    return { data: null, error: new Error("User not authenticated.") };
+  }
+
+  const { data: profileRow, error: profileLookupError } = await supabase
+    .from("profiles")
+    .select("avatar_url")
+    .eq("id", currentUser.id)
+    .maybeSingle();
+  if (profileLookupError) {
+    return { data: null, error: profileLookupError };
+  }
+
+  const currentAvatarPath = String(profileRow?.avatar_url || "").trim();
+  const { error: profileUpdateError } = await supabase
+    .from("profiles")
+    .update({ avatar_url: null })
+    .eq("id", currentUser.id);
+  if (profileUpdateError) {
+    return { data: null, error: profileUpdateError };
+  }
+
+  if (currentAvatarPath && !/^https?:\/\//i.test(currentAvatarPath)) {
+    const { error: removeError } = await supabase.storage
+      .from(PROFILE_AVATAR_BUCKET)
+      .remove([currentAvatarPath]);
+    if (removeError) {
+      return { data: null, error: removeError };
+    }
+  }
+
+  return {
+    data: {
+      avatar_path: "",
+      avatar_url: "",
+    },
+    error: null,
+  };
 }
 
 export async function getCampaignDashboardItem(campaignId) {
@@ -285,6 +455,7 @@ const profileSelectColumns = [
   "last_name",
   "email",
   "phone",
+  "avatar_url",
   "organization_name",
   "campaign_manager",
   "volunteer_skills",

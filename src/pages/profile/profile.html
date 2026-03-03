@@ -23,6 +23,30 @@
           Phone
           <input id="profilePhone" type="tel" />
         </label>
+        <div class="profile-form-row profile-avatar-section" aria-label="Profile avatar upload">
+          <p class="skills-title">Profile Avatar</p>
+          <p class="skills-help">Upload an image for your profile.</p>
+          <div class="profile-avatar-preview-wrap">
+            <img id="profileAvatarPreview" class="profile-avatar-preview" alt="Profile avatar preview" hidden />
+            <div id="profileAvatarPlaceholder" class="profile-avatar-placeholder">No avatar uploaded yet.</div>
+          </div>
+          <label>
+            Select Image
+            <input id="profileAvatarFile" type="file" accept="image/*" />
+          </label>
+          <div class="profile-avatar-actions">
+            <button id="profileAvatarUploadBtn" class="btn btn-neutral" type="button">Upload Avatar</button>
+            <button id="profileAvatarEditBtn" class="btn btn-neutral" type="button" hidden>Edit Avatar</button>
+            <button id="profileAvatarDeleteBtn" class="btn profile-avatar-delete-btn" type="button" hidden>
+              Delete Avatar
+            </button>
+            <span id="profileAvatarLoading" class="profile-avatar-loading" hidden>Uploading...</span>
+            <a id="profileAvatarDownloadLink" class="profile-avatar-download" href="#" target="_blank" rel="noreferrer" hidden>
+              Open current avatar
+            </a>
+          </div>
+          <p id="profileAvatarMessage" class="inline-message" hidden></p>
+        </div>
         <div id="volunteerSkillsFields" class="profile-form-row volunteer-skills-fields" hidden>
           <p class="skills-title">Skills</p>
           <p id="selectedSkillsLine" class="skills-selected-line">Selected: None</p>

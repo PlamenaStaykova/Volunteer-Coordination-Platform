@@ -3,7 +3,15 @@ import pageHtml from "./profile.html?raw";
 import { renderHeader } from "../../components/header/header.js";
 import { renderFooter } from "../../components/footer/footer.js";
 import { requireAuth } from "../../lib/guards.js";
-import { getIsAdmin, getUserProfile, getUserType, updateUserProfile } from "../../lib/supabase.js";
+import {
+  deleteProfileAvatar,
+  getIsAdmin,
+  getProfileAvatarSignedUrl,
+  getUserProfile,
+  getUserType,
+  updateUserProfile,
+  uploadProfileAvatar,
+} from "../../lib/supabase.js";
 
 const VOLUNTEER_SKILLS = [
   "Time Management",
@@ -17,6 +25,7 @@ const VOLUNTEER_SKILLS = [
   "Logistics Coordination",
   "Public Speaking",
 ];
+const PROFILE_AVATAR_MAX_SIZE_BYTES = 5 * 1024 * 1024;
 
 function setInlineMessage(element, message, type = "error") {
   if (!element) {
@@ -56,6 +65,15 @@ export async function renderProfilePage(mountNode) {
   const profileLastName = mountNode.querySelector("#profileLastName");
   const profileEmail = mountNode.querySelector("#profileEmail");
   const profilePhone = mountNode.querySelector("#profilePhone");
+  const profileAvatarFile = mountNode.querySelector("#profileAvatarFile");
+  const profileAvatarUploadBtn = mountNode.querySelector("#profileAvatarUploadBtn");
+  const profileAvatarEditBtn = mountNode.querySelector("#profileAvatarEditBtn");
+  const profileAvatarDeleteBtn = mountNode.querySelector("#profileAvatarDeleteBtn");
+  const profileAvatarLoading = mountNode.querySelector("#profileAvatarLoading");
+  const profileAvatarPreview = mountNode.querySelector("#profileAvatarPreview");
+  const profileAvatarPlaceholder = mountNode.querySelector("#profileAvatarPlaceholder");
+  const profileAvatarDownloadLink = mountNode.querySelector("#profileAvatarDownloadLink");
+  const profileAvatarMessage = mountNode.querySelector("#profileAvatarMessage");
   const volunteerSkillsFields = mountNode.querySelector("#volunteerSkillsFields");
   const selectedSkillsLine = mountNode.querySelector("#selectedSkillsLine");
   const selectedSkillsEditor = mountNode.querySelector("#selectedSkillsEditor");
@@ -72,6 +90,8 @@ export async function renderProfilePage(mountNode) {
   volunteerSkillsFields.hidden = !isVolunteer;
 
   let savedVolunteerSkills = [];
+  let currentAvatarPath = "";
+  let isAvatarUploading = false;
 
   const normalizeVolunteerSkills = (skills = []) => {
     const unique = new Set();
@@ -184,6 +204,91 @@ export async function renderProfilePage(mountNode) {
     renderVolunteerSkillsOptions();
   };
 
+  const syncAvatarActionButtons = () => {
+    const hasAvatar = Boolean(String(currentAvatarPath || "").trim());
+    if (profileAvatarEditBtn) {
+      profileAvatarEditBtn.hidden = !hasAvatar;
+    }
+    if (profileAvatarDeleteBtn) {
+      profileAvatarDeleteBtn.hidden = !hasAvatar;
+    }
+    if (profileAvatarUploadBtn) {
+      profileAvatarUploadBtn.textContent = hasAvatar ? "Save Avatar" : "Upload Avatar";
+    }
+  };
+
+  const setAvatarUploadingState = (isUploading, loadingLabel = "Uploading...") => {
+    isAvatarUploading = isUploading;
+    if (profileAvatarUploadBtn) {
+      profileAvatarUploadBtn.disabled = isUploading;
+    }
+    if (profileAvatarEditBtn) {
+      profileAvatarEditBtn.disabled = isUploading;
+    }
+    if (profileAvatarDeleteBtn) {
+      profileAvatarDeleteBtn.disabled = isUploading;
+    }
+    if (profileAvatarFile) {
+      profileAvatarFile.disabled = isUploading;
+    }
+    if (profileAvatarLoading) {
+      profileAvatarLoading.textContent = loadingLabel;
+      profileAvatarLoading.hidden = !isUploading;
+    }
+    if (!isUploading) {
+      syncAvatarActionButtons();
+    }
+  };
+
+  const setAvatarPreview = (signedUrl = "", avatarPath = "") => {
+    const normalizedUrl = String(signedUrl || "").trim();
+    const normalizedPath = String(avatarPath || "").trim();
+
+    if (profileAvatarPreview) {
+      profileAvatarPreview.hidden = !normalizedUrl;
+      profileAvatarPreview.src = normalizedUrl || "";
+    }
+    if (profileAvatarPlaceholder) {
+      profileAvatarPlaceholder.hidden = Boolean(normalizedUrl);
+    }
+    if (profileAvatarDownloadLink) {
+      profileAvatarDownloadLink.hidden = !normalizedUrl;
+      profileAvatarDownloadLink.href = normalizedUrl || "#";
+      if (normalizedPath) {
+        profileAvatarDownloadLink.setAttribute("download", normalizedPath.split("/").pop() || "avatar");
+      } else {
+        profileAvatarDownloadLink.removeAttribute("download");
+      }
+    }
+  };
+
+  const loadAvatarPreview = async (avatarPath) => {
+    const normalizedPath = String(avatarPath || "").trim();
+    if (!normalizedPath) {
+      setAvatarPreview("", "");
+      syncAvatarActionButtons();
+      return;
+    }
+
+    const { data, error } = await getProfileAvatarSignedUrl(normalizedPath);
+    if (error || !data?.signedUrl) {
+      setAvatarPreview("", "");
+      setInlineMessage(profileAvatarMessage, error?.message || "Unable to load avatar preview.");
+      syncAvatarActionButtons();
+      return;
+    }
+
+    setAvatarPreview(data.signedUrl, normalizedPath);
+    setInlineMessage(profileAvatarMessage, "");
+    syncAvatarActionButtons();
+  };
+
+  profileAvatarPreview?.addEventListener("error", () => {
+    setAvatarPreview("", "");
+    setInlineMessage(profileAvatarMessage, "Unable to display avatar preview.");
+    syncAvatarActionButtons();
+  });
+
   const loadProfileData = async () => {
     const { data, error } = await getUserProfile(user);
     if (error) {
@@ -202,6 +307,8 @@ export async function renderProfilePage(mountNode) {
     profileLastName.value = data?.last_name || fallbackLastName;
     profileEmail.value = data?.email || user.email || "";
     profilePhone.value = data?.phone || "";
+    currentAvatarPath = String(data?.avatar_url || "").trim();
+    await loadAvatarPreview(currentAvatarPath);
 
     if (showOrganizerProfileFields) {
       profileOrganizationName.value = data?.organization_name || "";
@@ -211,6 +318,98 @@ export async function renderProfilePage(mountNode) {
       setSavedVolunteerSkills(data?.volunteer_skills || []);
     }
   };
+
+  profileAvatarUploadBtn?.addEventListener("click", async () => {
+    if (isAvatarUploading) {
+      return;
+    }
+
+    const selectedFile = profileAvatarFile?.files?.[0] || null;
+    if (!selectedFile) {
+      setInlineMessage(profileAvatarMessage, "Select an image before uploading.");
+      return;
+    }
+
+    const selectedFileType = String(selectedFile.type || "").toLowerCase();
+    if (!selectedFileType.startsWith("image/")) {
+      setInlineMessage(profileAvatarMessage, "Only image files are allowed.");
+      return;
+    }
+
+    if (Number(selectedFile.size || 0) > PROFILE_AVATAR_MAX_SIZE_BYTES) {
+      setInlineMessage(profileAvatarMessage, "Image is too large. Maximum size is 5 MB.");
+      return;
+    }
+
+    setInlineMessage(profileAvatarMessage, "");
+    setAvatarUploadingState(true, "Uploading...");
+
+    try {
+      const { data, error } = await uploadProfileAvatar(selectedFile, user);
+      if (error) {
+        setInlineMessage(profileAvatarMessage, error.message || "Unable to upload avatar.");
+        return;
+      }
+
+      currentAvatarPath = String(data?.avatar_path || "").trim();
+      if (data?.avatar_url) {
+        setAvatarPreview(data.avatar_url, currentAvatarPath);
+      } else {
+        await loadAvatarPreview(currentAvatarPath);
+      }
+
+      if (profileAvatarFile) {
+        profileAvatarFile.value = "";
+      }
+      setInlineMessage(profileAvatarMessage, "Avatar uploaded successfully.", "success");
+    } finally {
+      setAvatarUploadingState(false);
+    }
+  });
+
+  profileAvatarEditBtn?.addEventListener("click", () => {
+    if (isAvatarUploading) {
+      return;
+    }
+
+    profileAvatarFile?.click();
+  });
+
+  profileAvatarDeleteBtn?.addEventListener("click", async () => {
+    if (isAvatarUploading) {
+      return;
+    }
+
+    if (!currentAvatarPath) {
+      setInlineMessage(profileAvatarMessage, "No avatar to delete.");
+      return;
+    }
+
+    const shouldDelete = window.confirm("Delete your current avatar?");
+    if (!shouldDelete) {
+      return;
+    }
+
+    setInlineMessage(profileAvatarMessage, "");
+    setAvatarUploadingState(true, "Deleting...");
+    try {
+      const { error } = await deleteProfileAvatar(user);
+      if (error) {
+        setInlineMessage(profileAvatarMessage, error.message || "Unable to delete avatar.");
+        return;
+      }
+
+      currentAvatarPath = "";
+      if (profileAvatarFile) {
+        profileAvatarFile.value = "";
+      }
+      setAvatarPreview("", "");
+      syncAvatarActionButtons();
+      setInlineMessage(profileAvatarMessage, "Avatar deleted.", "success");
+    } finally {
+      setAvatarUploadingState(false);
+    }
+  });
 
   profileForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -258,6 +457,7 @@ export async function renderProfilePage(mountNode) {
   });
 
   renderVolunteerSkillsOptions();
+  syncAvatarActionButtons();
   await loadProfileData();
   mountNode.append(renderFooter());
 }
