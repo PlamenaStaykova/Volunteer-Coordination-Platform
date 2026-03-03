@@ -11,9 +11,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
 
-// load .env for local convenience
+// load .env.local for local convenience
 import dotenv from "dotenv";
-dotenv.config();
+dotenv.config({ path: ".env.local" });
 
 const url = process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -302,3 +302,5 @@ seed().catch((err) => {
   console.error("unexpected error", err);
   process.exit(1);
 });
+
+
