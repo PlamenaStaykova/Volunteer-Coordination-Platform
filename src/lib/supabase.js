@@ -20,6 +20,9 @@ const ALLOWED_VOLUNTEER_SKILLS = [
 const PROFILE_AVATAR_BUCKET = "attendance-proofs";
 const PROFILE_AVATAR_MAX_SIZE_BYTES = 5 * 1024 * 1024;
 const PROFILE_AVATAR_SIGNED_URL_TTL_SECONDS = 60 * 60;
+const HOME_THEME_BUCKET = "home-gallery";
+const CAMPAIGN_AVATAR_BUCKET = "event-covers";
+const CAMPAIGN_AVATAR_MAX_SIZE_BYTES = 8 * 1024 * 1024;
 
 if (!hasSupabaseConfig) {
   console.warn(missingConfigMessage);
@@ -148,12 +151,44 @@ export async function getPublicCampaignOverview() {
   return { data: data ?? [], error };
 }
 
+export async function getPublicCampaignCoverPaths(campaignIds = []) {
+  if (!supabase) {
+    return { data: [], error: new Error(missingConfigMessage) };
+  }
+
+  const ids = (Array.isArray(campaignIds) ? campaignIds : []).map((id) => String(id || "").trim()).filter(Boolean);
+  if (ids.length === 0) {
+    return { data: [], error: null };
+  }
+
+  const { data, error } = await supabase.from("events").select("id, cover_image_path").in("id", ids);
+  return { data: data ?? [], error };
+}
+
 export async function getHomeGalleryImages() {
   if (!supabase) {
     return { data: [], error: new Error(missingConfigMessage) };
   }
 
   const { data, error } = await supabase.rpc("get_home_gallery_images");
+  return { data: data ?? [], error };
+}
+
+export async function getHomeThemeAssets() {
+  if (!supabase) {
+    return { data: [], error: new Error(missingConfigMessage) };
+  }
+
+  const { data, error } = await supabase.rpc("get_home_theme_assets");
+  return { data: data ?? [], error };
+}
+
+export async function getHomeCampaignSlots() {
+  if (!supabase) {
+    return { data: [], error: new Error(missingConfigMessage) };
+  }
+
+  const { data, error } = await supabase.rpc("get_home_campaign_slots");
   return { data: data ?? [], error };
 }
 
@@ -219,6 +254,296 @@ export async function deleteHomeGalleryImage(imageId, imagePath) {
 
   if (imagePath) {
     const { error: deleteStorageError } = await supabase.storage.from("home-gallery").remove([imagePath]);
+    if (deleteStorageError) {
+      return { error: deleteStorageError };
+    }
+  }
+
+  return { error: null };
+}
+
+export async function uploadHomeThemeAsset(file, assetKey, user = null) {
+  if (!supabase) {
+    return { data: null, error: new Error(missingConfigMessage) };
+  }
+
+  const normalizedAssetKey = String(assetKey || "").trim();
+  if (!normalizedAssetKey) {
+    return { data: null, error: new Error("Theme asset key is required.") };
+  }
+
+  const currentUser = user || (await getCurrentUser());
+  if (!currentUser) {
+    return { data: null, error: new Error("User not authenticated.") };
+  }
+  if (!file) {
+    return { data: null, error: new Error("Please select an image file.") };
+  }
+
+  const fileType = String(file?.type || "").toLowerCase();
+  if (!fileType.startsWith("image/")) {
+    return { data: null, error: new Error("Only image files are allowed.") };
+  }
+
+  const { data: existingAsset, error: existingAssetError } = await supabase
+    .from("home_theme_assets")
+    .select("asset_key, asset_path")
+    .eq("asset_key", normalizedAssetKey)
+    .maybeSingle();
+  if (existingAssetError) {
+    return { data: null, error: existingAssetError };
+  }
+
+  const fileName = sanitizeStorageFileName(file?.name || "theme");
+  const storagePath = `${currentUser.id}/theme-${normalizedAssetKey}-${Date.now()}-${fileName}`;
+  const { error: uploadError } = await supabase.storage.from(HOME_THEME_BUCKET).upload(storagePath, file, {
+    upsert: true,
+    contentType: fileType || "application/octet-stream",
+  });
+  if (uploadError) {
+    return { data: null, error: uploadError };
+  }
+
+  const { data: publicUrlData } = supabase.storage.from(HOME_THEME_BUCKET).getPublicUrl(storagePath);
+  const assetUrl = publicUrlData?.publicUrl || "";
+
+  const { data, error } = await supabase
+    .from("home_theme_assets")
+    .upsert(
+      {
+        asset_key: normalizedAssetKey,
+        asset_path: storagePath,
+        asset_url: assetUrl,
+        updated_by: currentUser.id,
+      },
+      { onConflict: "asset_key" }
+    )
+    .select("asset_key, asset_path, asset_url, updated_at")
+    .single();
+
+  if (error) {
+    await supabase.storage.from(HOME_THEME_BUCKET).remove([storagePath]);
+    return { data: null, error };
+  }
+
+  const previousPath = String(existingAsset?.asset_path || "").trim();
+  if (previousPath && previousPath !== storagePath) {
+    await supabase.storage.from(HOME_THEME_BUCKET).remove([previousPath]);
+  }
+
+  return { data, error: null };
+}
+
+export async function deleteHomeThemeAsset(assetKey, user = null) {
+  if (!supabase) {
+    return { error: new Error(missingConfigMessage) };
+  }
+
+  const normalizedAssetKey = String(assetKey || "").trim();
+  if (!normalizedAssetKey) {
+    return { error: new Error("Theme asset key is required.") };
+  }
+
+  const currentUser = user || (await getCurrentUser());
+  if (!currentUser) {
+    return { error: new Error("User not authenticated.") };
+  }
+
+  const { data: existingAsset, error: existingAssetError } = await supabase
+    .from("home_theme_assets")
+    .select("asset_key, asset_path")
+    .eq("asset_key", normalizedAssetKey)
+    .maybeSingle();
+  if (existingAssetError) {
+    return { error: existingAssetError };
+  }
+  if (!existingAsset) {
+    return { error: null };
+  }
+
+  const { error: deleteRowError } = await supabase
+    .from("home_theme_assets")
+    .delete()
+    .eq("asset_key", normalizedAssetKey);
+  if (deleteRowError) {
+    return { error: deleteRowError };
+  }
+
+  const existingPath = String(existingAsset.asset_path || "").trim();
+  if (existingPath) {
+    const { error: deleteStorageError } = await supabase.storage.from(HOME_THEME_BUCKET).remove([existingPath]);
+    if (deleteStorageError) {
+      return { error: deleteStorageError };
+    }
+  }
+
+  return { error: null };
+}
+
+export async function updateHomeCampaignSlot(slotKey, campaignId = null, user = null) {
+  if (!supabase) {
+    return { data: null, error: new Error(missingConfigMessage) };
+  }
+
+  const normalizedSlotKey = String(slotKey || "").trim();
+  if (!normalizedSlotKey) {
+    return { data: null, error: new Error("Home slot key is required.") };
+  }
+
+  const currentUser = user || (await getCurrentUser());
+  if (!currentUser) {
+    return { data: null, error: new Error("User not authenticated.") };
+  }
+
+  let normalizedCampaignId = campaignId;
+  if (normalizedCampaignId != null) {
+    normalizedCampaignId = String(normalizedCampaignId).trim() || null;
+  }
+
+  const { data, error } = await supabase
+    .from("home_campaign_slots")
+    .update({
+      campaign_id: normalizedCampaignId,
+      updated_by: currentUser.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("slot_key", normalizedSlotKey)
+    .select("slot_key, slot_label, slot_order, campaign_id")
+    .single();
+
+  return { data, error };
+}
+
+export function getCampaignCoverPublicUrl(coverImagePath) {
+  if (!supabase) {
+    return "";
+  }
+
+  const normalizedPath = String(coverImagePath || "").trim();
+  if (!normalizedPath) {
+    return "";
+  }
+  if (/^https?:\/\//i.test(normalizedPath)) {
+    return normalizedPath;
+  }
+
+  const { data } = supabase.storage.from(CAMPAIGN_AVATAR_BUCKET).getPublicUrl(normalizedPath);
+  return data?.publicUrl || "";
+}
+
+export async function uploadCampaignCoverImage(campaignId, file, user = null) {
+  if (!supabase) {
+    return { data: null, error: new Error(missingConfigMessage) };
+  }
+
+  const normalizedCampaignId = String(campaignId || "").trim();
+  if (!normalizedCampaignId) {
+    return { data: null, error: new Error("Campaign id is required.") };
+  }
+
+  const currentUser = user || (await getCurrentUser());
+  if (!currentUser) {
+    return { data: null, error: new Error("User not authenticated.") };
+  }
+  if (!file) {
+    return { data: null, error: new Error("Please select an image file.") };
+  }
+
+  const fileType = String(file?.type || "").toLowerCase();
+  if (!fileType.startsWith("image/")) {
+    return { data: null, error: new Error("Only image files are allowed.") };
+  }
+  if (Number(file?.size || 0) > CAMPAIGN_AVATAR_MAX_SIZE_BYTES) {
+    return { data: null, error: new Error("Image is too large. Maximum size is 8 MB.") };
+  }
+
+  const { data: currentCampaign, error: currentCampaignError } = await supabase
+    .from("events")
+    .select("id, cover_image_path")
+    .eq("id", normalizedCampaignId)
+    .maybeSingle();
+  if (currentCampaignError) {
+    return { data: null, error: currentCampaignError };
+  }
+  if (!currentCampaign) {
+    return { data: null, error: new Error("Campaign not found.") };
+  }
+
+  const fileName = sanitizeStorageFileName(file?.name || "campaign-cover");
+  const storagePath = `${currentUser.id}/campaign-${normalizedCampaignId}-${Date.now()}-${fileName}`;
+  const { error: uploadError } = await supabase.storage.from(CAMPAIGN_AVATAR_BUCKET).upload(storagePath, file, {
+    upsert: true,
+    contentType: fileType || "application/octet-stream",
+  });
+  if (uploadError) {
+    return { data: null, error: uploadError };
+  }
+
+  const { data: updatedCampaign, error: updateError } = await supabase
+    .from("events")
+    .update({ cover_image_path: storagePath })
+    .eq("id", normalizedCampaignId)
+    .select("id, cover_image_path")
+    .single();
+  if (updateError) {
+    await supabase.storage.from(CAMPAIGN_AVATAR_BUCKET).remove([storagePath]);
+    return { data: null, error: updateError };
+  }
+
+  const previousPath = String(currentCampaign?.cover_image_path || "").trim();
+  if (previousPath && !/^https?:\/\//i.test(previousPath) && previousPath !== storagePath) {
+    await supabase.storage.from(CAMPAIGN_AVATAR_BUCKET).remove([previousPath]);
+  }
+
+  return {
+    data: {
+      cover_image_path: updatedCampaign?.cover_image_path || storagePath,
+      cover_image_url: getCampaignCoverPublicUrl(updatedCampaign?.cover_image_path || storagePath),
+    },
+    error: null,
+  };
+}
+
+export async function deleteCampaignCoverImage(campaignId, user = null) {
+  if (!supabase) {
+    return { error: new Error(missingConfigMessage) };
+  }
+
+  const normalizedCampaignId = String(campaignId || "").trim();
+  if (!normalizedCampaignId) {
+    return { error: new Error("Campaign id is required.") };
+  }
+
+  const currentUser = user || (await getCurrentUser());
+  if (!currentUser) {
+    return { error: new Error("User not authenticated.") };
+  }
+
+  const { data: currentCampaign, error: currentCampaignError } = await supabase
+    .from("events")
+    .select("id, cover_image_path")
+    .eq("id", normalizedCampaignId)
+    .maybeSingle();
+  if (currentCampaignError) {
+    return { error: currentCampaignError };
+  }
+  if (!currentCampaign) {
+    return { error: new Error("Campaign not found.") };
+  }
+
+  const existingPath = String(currentCampaign.cover_image_path || "").trim();
+  const { error: updateError } = await supabase
+    .from("events")
+    .update({ cover_image_path: null })
+    .eq("id", normalizedCampaignId);
+  if (updateError) {
+    return { error: updateError };
+  }
+
+  if (existingPath && !/^https?:\/\//i.test(existingPath)) {
+    const { error: deleteStorageError } = await supabase.storage
+      .from(CAMPAIGN_AVATAR_BUCKET)
+      .remove([existingPath]);
     if (deleteStorageError) {
       return { error: deleteStorageError };
     }
@@ -795,7 +1120,9 @@ export async function getOrganizerCampaigns(options = {}) {
 
   let query = supabase
     .from("events")
-    .select("id, title, description, location, start_at, end_at, status, required_skills, created_by, created_at")
+    .select(
+      "id, title, description, location, start_at, end_at, status, required_skills, cover_image_path, created_by, created_at"
+    )
     .order("created_at", { ascending: false });
 
   const includeAll = Boolean(options?.includeAll);
@@ -925,7 +1252,9 @@ export async function getCampaignById(campaignId) {
 
   const { data: event, error: eventError } = await supabase
     .from("events")
-    .select("id, title, description, location, start_at, end_at, status, required_skills, created_by, created_at")
+    .select(
+      "id, title, description, location, start_at, end_at, status, required_skills, cover_image_path, created_by, created_at"
+    )
     .eq("id", campaignId)
     .maybeSingle();
 

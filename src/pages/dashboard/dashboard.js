@@ -6,12 +6,17 @@ import { requireAuth, requireRole } from "../../lib/guards.js";
 import {
   getAdminDashboardOverview,
   adminCreateUser,
+  deleteCampaignCoverImage,
   deleteAdminUser,
   deleteCampaign,
   deleteHomeGalleryImage,
+  deleteHomeThemeAsset,
   getAdminUsers,
+  getCampaignCoverPublicUrl,
   getCampaignDashboardData,
+  getHomeCampaignSlots,
   getHomeGalleryImages,
+  getHomeThemeAssets,
   getIsAdmin,
   getJoinedCampaignIds,
   getOrganizerCampaigns,
@@ -22,7 +27,10 @@ import {
   leaveCampaign,
   setCampaignStatus,
   updateAdminUser,
+  updateHomeCampaignSlot,
+  uploadCampaignCoverImage,
   uploadHomeGalleryImage,
+  uploadHomeThemeAsset,
   updateCampaignWithShift,
 } from "../../lib/supabase.js";
 
@@ -37,6 +45,18 @@ const VOLUNTEER_SKILLS = [
   "Fundraising",
   "Logistics Coordination",
   "Public Speaking",
+];
+const CAMPAIGN_AVATAR_MAX_SIZE_BYTES = 8 * 1024 * 1024;
+const HOME_THEME_LABELS = {
+  hero_background: "Hero Background",
+  gallery_background: "Gallery Background",
+};
+const HOME_SLOT_FALLBACKS = [
+  { slot_key: "hero_feature", slot_label: "Hero Feature", slot_order: 0 },
+  { slot_key: "community_support", slot_label: "Community Support", slot_order: 1 },
+  { slot_key: "education_drive", slot_label: "Education Drive", slot_order: 2 },
+  { slot_key: "health_outreach", slot_label: "Health Outreach", slot_order: 3 },
+  { slot_key: "emergency_response", slot_label: "Emergency Response", slot_order: 4 },
 ];
 
 function formatDateTime(value) {
@@ -423,6 +443,14 @@ export async function renderDashboardPage(mountNode) {
   const galleryMessage = mountNode.querySelector("#galleryMessage");
   const adminGalleryList = mountNode.querySelector("#adminGalleryList");
   const adminGalleryEmpty = mountNode.querySelector("#adminGalleryEmpty");
+  const adminHomeConfigCard = mountNode.querySelector("#adminHomeConfigCard");
+  const homeThemeUploadForm = mountNode.querySelector("#homeThemeUploadForm");
+  const homeThemeAssetKey = mountNode.querySelector("#homeThemeAssetKey");
+  const homeThemeImageFile = mountNode.querySelector("#homeThemeImageFile");
+  const homeThemeMessage = mountNode.querySelector("#homeThemeMessage");
+  const homeThemeAssetList = mountNode.querySelector("#homeThemeAssetList");
+  const homeSlotsMessage = mountNode.querySelector("#homeSlotsMessage");
+  const homeCampaignSlotList = mountNode.querySelector("#homeCampaignSlotList");
   const adminUsersCard = mountNode.querySelector("#adminUsersCard");
   const adminUserFilterTabs = [...mountNode.querySelectorAll("[data-user-filter]")];
   const adminCreateUserForm = mountNode.querySelector("#adminCreateUserForm");
@@ -460,6 +488,9 @@ export async function renderDashboardPage(mountNode) {
   if (adminGalleryCard) {
     adminGalleryCard.hidden = !isAdmin;
   }
+  if (adminHomeConfigCard) {
+    adminHomeConfigCard.hidden = !isAdmin;
+  }
   if (adminUsersCard) {
     adminUsersCard.hidden = !isAdmin;
   }
@@ -477,6 +508,8 @@ export async function renderDashboardPage(mountNode) {
   let adminOverview = { organizers: [], volunteers: [] };
   let adminUsers = [];
   let homeGalleryImages = [];
+  let homeThemeAssets = [];
+  let homeCampaignSlots = [];
   let activeFilter = "total";
   let adminUserFilter = "organizer";
   let searchQuery = "";
@@ -690,6 +723,186 @@ export async function renderDashboardPage(mountNode) {
     }
   };
 
+  const getSortedHomeCampaignSlots = () => {
+    const slots = Array.isArray(homeCampaignSlots) && homeCampaignSlots.length > 0 ? homeCampaignSlots : HOME_SLOT_FALLBACKS;
+    return [...slots].sort((a, b) => Number(a.slot_order || 0) - Number(b.slot_order || 0));
+  };
+
+  const renderHomeThemeAssets = () => {
+    if (!homeThemeAssetList) {
+      return;
+    }
+
+    homeThemeAssetList.innerHTML = "";
+    const sortedAssets = [...(homeThemeAssets ?? [])].sort((a, b) =>
+      String(a.asset_key || "").localeCompare(String(b.asset_key || ""))
+    );
+
+    if (sortedAssets.length === 0) {
+      const item = document.createElement("li");
+      item.className = "application-item";
+      item.textContent = "No theme images uploaded yet.";
+      homeThemeAssetList.append(item);
+      return;
+    }
+
+    for (const asset of sortedAssets) {
+      const item = document.createElement("li");
+      item.className = "application-item home-theme-asset-item";
+      const label = HOME_THEME_LABELS[asset.asset_key] || asset.asset_key || "Theme Asset";
+      item.innerHTML = `
+        <p><strong>${label}</strong></p>
+        <img src="${asset.asset_url}" alt="${label}" loading="lazy" />
+      `;
+
+      const actions = document.createElement("div");
+      actions.className = "item-actions";
+
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "btn btn-small btn-danger";
+      deleteButton.textContent = "Delete Theme Image";
+      deleteButton.addEventListener("click", async () => {
+        const shouldDelete = window.confirm(`Delete "${label}" image?`);
+        if (!shouldDelete) {
+          return;
+        }
+
+        const { error } = await deleteHomeThemeAsset(asset.asset_key, user);
+        if (error) {
+          setInlineMessage(homeThemeMessage, error.message || "Failed to delete theme image.");
+          return;
+        }
+
+        setInlineMessage(homeThemeMessage, "Theme image deleted.", "success");
+        await loadHomeConfigurationData();
+      });
+
+      actions.append(deleteButton);
+      item.append(actions);
+      homeThemeAssetList.append(item);
+    }
+  };
+
+  const renderHomeCampaignSlots = () => {
+    if (!homeCampaignSlotList) {
+      return;
+    }
+
+    homeCampaignSlotList.innerHTML = "";
+    const orderedSlots = getSortedHomeCampaignSlots();
+    const campaignOptions = [...organizerCampaigns].sort((a, b) => String(a.title || "").localeCompare(String(b.title || "")));
+
+    for (const slot of orderedSlots) {
+      const item = document.createElement("li");
+      item.className = "organizer-campaign-item";
+      const slotLabel = String(slot?.slot_label || "Home Slot");
+      const previewUrl = getCampaignCoverPublicUrl(slot?.campaign_cover_image_path || "");
+      const selectedCampaignId = String(slot?.campaign_id || "");
+      const selectedCampaignTitle =
+        slot?.campaign_title ||
+        campaignOptions.find((campaign) => String(campaign.id) === selectedCampaignId)?.title ||
+        "";
+
+      item.innerHTML = `
+        <div class="campaign-title-row">
+          <h4>${slotLabel}</h4>
+        </div>
+        <div class="home-slot-preview-wrap">
+          ${
+            previewUrl
+              ? `<img src="${previewUrl}" alt="${selectedCampaignTitle || slotLabel}" loading="lazy" />`
+              : `<div class="home-slot-preview-placeholder">Placeholder</div>`
+          }
+        </div>
+        <p><strong>Current Campaign:</strong> ${selectedCampaignTitle || "None selected"}</p>
+      `;
+
+      const form = document.createElement("form");
+      form.className = "slot-assign-form";
+
+      const label = document.createElement("label");
+      label.textContent = "Assign Campaign";
+
+      const select = document.createElement("select");
+      const emptyOption = document.createElement("option");
+      emptyOption.value = "";
+      emptyOption.textContent = "No campaign";
+      select.append(emptyOption);
+
+      for (const campaign of campaignOptions) {
+        const option = document.createElement("option");
+        option.value = campaign.id;
+        const hasAvatar = Boolean(String(campaign.cover_image_path || "").trim());
+        option.textContent = hasAvatar ? campaign.title : `${campaign.title} (no avatar yet)`;
+        if (String(campaign.id) === selectedCampaignId) {
+          option.selected = true;
+        }
+        select.append(option);
+      }
+
+      label.append(select);
+      form.append(label);
+
+      const actions = document.createElement("div");
+      actions.className = "item-actions";
+
+      const saveButton = document.createElement("button");
+      saveButton.type = "submit";
+      saveButton.className = "btn btn-small";
+      saveButton.textContent = "Save Slot";
+      actions.append(saveButton);
+
+      const clearButton = document.createElement("button");
+      clearButton.type = "button";
+      clearButton.className = "btn btn-small btn-neutral";
+      clearButton.textContent = "Clear Slot";
+      clearButton.addEventListener("click", async () => {
+        const { error } = await updateHomeCampaignSlot(slot.slot_key, null, user);
+        if (error) {
+          setInlineMessage(homeSlotsMessage, error.message || "Unable to clear slot.");
+          return;
+        }
+
+        setInlineMessage(homeSlotsMessage, "Slot cleared.", "success");
+        await loadHomeConfigurationData();
+      });
+      actions.append(clearButton);
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const nextCampaignId = String(select.value || "").trim();
+        if (!nextCampaignId) {
+          setInlineMessage(homeSlotsMessage, "Select a campaign or use Clear Slot.");
+          return;
+        }
+
+        const selectedCampaign = campaignOptions.find((campaign) => String(campaign.id) === nextCampaignId);
+        if (!selectedCampaign) {
+          setInlineMessage(homeSlotsMessage, "Selected campaign is invalid.");
+          return;
+        }
+        if (!selectedCampaign.cover_image_path) {
+          setInlineMessage(homeSlotsMessage, "Selected campaign has no avatar. Upload one first.");
+          return;
+        }
+
+        const { error } = await updateHomeCampaignSlot(slot.slot_key, nextCampaignId, user);
+        if (error) {
+          setInlineMessage(homeSlotsMessage, error.message || "Unable to update slot.");
+          return;
+        }
+
+        setInlineMessage(homeSlotsMessage, "Home slot updated.", "success");
+        await loadHomeConfigurationData();
+      });
+
+      form.append(actions);
+      item.append(form);
+      homeCampaignSlotList.append(item);
+    }
+  };
+
   const renderAdminUsers = () => {
     if (!adminUserList || !adminUserEmpty) {
       return;
@@ -888,6 +1101,33 @@ export async function renderDashboardPage(mountNode) {
     renderHomeGalleryAdminList();
   };
 
+  const loadHomeConfigurationData = async () => {
+    if (!isAdmin) {
+      return;
+    }
+
+    const [themeResult, slotResult] = await Promise.all([getHomeThemeAssets(), getHomeCampaignSlots()]);
+
+    if (themeResult.error) {
+      homeThemeAssets = [];
+      setInlineMessage(homeThemeMessage, themeResult.error.message || "Unable to load theme images.");
+    } else {
+      homeThemeAssets = themeResult.data ?? [];
+      setInlineMessage(homeThemeMessage, "");
+    }
+
+    if (slotResult.error) {
+      homeCampaignSlots = [];
+      setInlineMessage(homeSlotsMessage, slotResult.error.message || "Unable to load home slot configuration.");
+    } else {
+      homeCampaignSlots = slotResult.data ?? [];
+      setInlineMessage(homeSlotsMessage, "");
+    }
+
+    renderHomeThemeAssets();
+    renderHomeCampaignSlots();
+  };
+
   const loadAdminUsersData = async () => {
     if (!isAdmin) {
       return;
@@ -967,6 +1207,8 @@ export async function renderDashboardPage(mountNode) {
       item.className = "organizer-campaign-item";
       const statusMeta = getEventStatusMeta(campaign.status);
       const requiredSkills = normalizeVolunteerSkills(campaign.required_skills || []);
+      const coverImagePath = String(campaign.cover_image_path || "").trim();
+      const coverImageUrl = getCampaignCoverPublicUrl(coverImagePath);
       const requiredSkillsEditorOptions = VOLUNTEER_SKILLS.map(
         (skill) => `
           <label class="admin-skill-option">
@@ -996,6 +1238,31 @@ export async function renderDashboardPage(mountNode) {
         <p><strong>Required Skills:</strong> ${requiredSkillsSummary}</p>
         <p><strong>Volunteers Invited:</strong> ${invitedSummary}</p>
         <p><strong>Volunteer Applications:</strong> ${appliedSummary}</p>
+        <div class="campaign-avatar-tools">
+          <p><strong>Campaign Avatar:</strong></p>
+          <div class="campaign-avatar-preview-wrap">
+            ${
+              coverImageUrl
+                ? `<img src="${coverImageUrl}" alt="${campaign.title}" loading="lazy" />`
+                : `<div class="campaign-avatar-placeholder">No avatar uploaded.</div>`
+            }
+          </div>
+          <label class="campaign-avatar-input-label">
+            Select Image
+            <input data-action="campaign-avatar-input" class="campaign-avatar-input" type="file" accept="image/*" />
+          </label>
+          <div class="item-actions">
+            <button type="button" class="btn btn-small" data-action="upload-cover">Upload Avatar</button>
+            <button
+              type="button"
+              class="btn btn-small btn-danger"
+              data-action="delete-cover"
+              ${coverImagePath ? "" : "hidden"}
+            >
+              Delete Avatar
+            </button>
+          </div>
+        </div>
         <form class="inline-edit-form" hidden>
           <div class="inline-edit-form-grid">
             <label class="full-width">
@@ -1039,6 +1306,9 @@ export async function renderDashboardPage(mountNode) {
       const editToggleButton = item.querySelector('[data-action="toggle-edit"]');
       const inlineEditForm = item.querySelector(".inline-edit-form");
       const cancelEditButton = item.querySelector('[data-action="cancel-edit"]');
+      const campaignAvatarInput = item.querySelector('[data-action="campaign-avatar-input"]');
+      const uploadCoverButton = item.querySelector('[data-action="upload-cover"]');
+      const deleteCoverButton = item.querySelector('[data-action="delete-cover"]');
 
       editToggleButton.addEventListener("click", () => {
         inlineEditForm.hidden = !inlineEditForm.hidden;
@@ -1079,6 +1349,77 @@ export async function renderDashboardPage(mountNode) {
         inlineEditForm.hidden = true;
         await loadOrganizerData();
         await loadCampaignData();
+      });
+
+      uploadCoverButton?.addEventListener("click", async () => {
+        const file = campaignAvatarInput?.files?.[0] || null;
+        if (!file) {
+          setInlineMessage(adminActionMessage, "Select an image file to upload campaign avatar.");
+          return;
+        }
+
+        const fileType = String(file.type || "").toLowerCase();
+        if (!fileType.startsWith("image/")) {
+          setInlineMessage(adminActionMessage, "Only image files are allowed for campaign avatars.");
+          return;
+        }
+
+        if (Number(file.size || 0) > CAMPAIGN_AVATAR_MAX_SIZE_BYTES) {
+          setInlineMessage(adminActionMessage, "Campaign avatar is too large. Maximum size is 8 MB.");
+          return;
+        }
+
+        uploadCoverButton.disabled = true;
+        if (deleteCoverButton) {
+          deleteCoverButton.disabled = true;
+        }
+
+        try {
+          const { error } = await uploadCampaignCoverImage(campaign.id, file, user);
+          if (error) {
+            setInlineMessage(adminActionMessage, error.message || "Unable to upload campaign avatar.");
+            return;
+          }
+
+          if (campaignAvatarInput) {
+            campaignAvatarInput.value = "";
+          }
+          setInlineMessage(adminActionMessage, "Campaign avatar uploaded.", "success");
+          await loadOrganizerData();
+          await loadHomeConfigurationData();
+        } finally {
+          uploadCoverButton.disabled = false;
+          if (deleteCoverButton) {
+            deleteCoverButton.disabled = false;
+          }
+        }
+      });
+
+      deleteCoverButton?.addEventListener("click", async () => {
+        const shouldDelete = window.confirm(`Delete avatar for "${campaign.title}"?`);
+        if (!shouldDelete) {
+          return;
+        }
+
+        uploadCoverButton.disabled = true;
+        deleteCoverButton.disabled = true;
+        try {
+          const { error } = await deleteCampaignCoverImage(campaign.id, user);
+          if (error) {
+            setInlineMessage(adminActionMessage, error.message || "Unable to delete campaign avatar.");
+            return;
+          }
+
+          if (campaignAvatarInput) {
+            campaignAvatarInput.value = "";
+          }
+          setInlineMessage(adminActionMessage, "Campaign avatar deleted.", "success");
+          await loadOrganizerData();
+          await loadHomeConfigurationData();
+        } finally {
+          uploadCoverButton.disabled = false;
+          deleteCoverButton.disabled = false;
+        }
       });
 
       const actions = document.createElement("div");
@@ -1283,6 +1624,7 @@ export async function renderDashboardPage(mountNode) {
     updateFilterCounters();
     if (isAdmin) {
       await loadAdminOverviewData();
+      renderHomeCampaignSlots();
     }
     renderOrganizerCampaigns();
   };
@@ -1364,12 +1706,34 @@ export async function renderDashboardPage(mountNode) {
       setInlineMessage(adminUsersMessage, "User account created.", "success");
       await loadAdminUsersData();
     });
+
+    homeThemeUploadForm?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const file = homeThemeImageFile?.files?.[0] || null;
+      if (!file) {
+        setInlineMessage(homeThemeMessage, "Select an image file first.");
+        return;
+      }
+
+      const { error } = await uploadHomeThemeAsset(file, homeThemeAssetKey.value, user);
+      if (error) {
+        setInlineMessage(homeThemeMessage, error.message || "Unable to upload theme image.");
+        return;
+      }
+
+      homeThemeUploadForm.reset();
+      homeThemeAssetKey.value = "hero_background";
+      setInlineMessage(homeThemeMessage, "Theme image uploaded.", "success");
+      await loadHomeConfigurationData();
+    });
   }
 
   updateFilterCounters();
   await loadVolunteerData();
   await loadOrganizerData();
   await loadHomeGalleryData();
+  await loadHomeConfigurationData();
   await loadAdminUsersData();
   await loadCampaignData();
 

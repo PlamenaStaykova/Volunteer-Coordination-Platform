@@ -110,6 +110,38 @@
         <p id="adminGalleryEmpty" class="campaign-empty-state" hidden>No home page images uploaded yet.</p>
       </article>
 
+      <article id="adminHomeConfigCard" class="admin-card admin-list-card" hidden>
+        <h3>Home Theme and Featured Campaign Slots</h3>
+        <section class="admin-home-config-section">
+          <h4>Theme Images</h4>
+          <form id="homeThemeUploadForm" class="admin-form compact-theme-form">
+            <label>
+              Theme Area
+              <select id="homeThemeAssetKey" required>
+                <option value="hero_background">Hero Background</option>
+                <option value="gallery_background">Gallery Background</option>
+              </select>
+            </label>
+            <label>
+              Image
+              <input id="homeThemeImageFile" type="file" accept="image/*" required />
+            </label>
+            <button class="btn btn-small" type="submit">Upload Theme Image</button>
+          </form>
+          <p id="homeThemeMessage" class="inline-message" hidden></p>
+          <ul id="homeThemeAssetList" class="applications-list"></ul>
+        </section>
+
+        <section class="admin-home-config-section">
+          <h4>Featured Campaign Slots</h4>
+          <p class="admin-hint">
+            Assign campaign avatars to each home slot. Campaigns without uploaded avatars will show placeholders.
+          </p>
+          <p id="homeSlotsMessage" class="inline-message" hidden></p>
+          <ul id="homeCampaignSlotList" class="organizer-campaign-list"></ul>
+        </section>
+      </article>
+
       <article id="adminUsersCard" class="admin-card admin-list-card" hidden>
         <h3>User Management</h3>
         <section class="dashboard-filters admin-user-filters" aria-label="User role filters">

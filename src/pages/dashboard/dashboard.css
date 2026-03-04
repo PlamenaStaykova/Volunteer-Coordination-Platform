@@ -516,6 +516,129 @@
   border-radius: 8px;
 }
 
+.campaign-avatar-tools {
+  margin-top: 0.75rem;
+  border: 1px solid #dce3eb;
+  border-radius: 8px;
+  background: #fbfdff;
+  padding: 0.65rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.campaign-avatar-tools p {
+  margin: 0;
+}
+
+.campaign-avatar-preview-wrap {
+  width: 100%;
+  max-width: 220px;
+  aspect-ratio: 1 / 1;
+  border: 1px dashed #c8d4e5;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f5f8ff;
+}
+
+.campaign-avatar-preview-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.campaign-avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  color: #4f6072;
+  font-size: 0.86rem;
+  padding: 0.55rem;
+}
+
+.campaign-avatar-input-label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 600;
+  font-size: 0.86rem;
+}
+
+.campaign-avatar-input {
+  width: 100%;
+}
+
+.admin-home-config-section {
+  margin-top: 1rem;
+}
+
+.admin-home-config-section h4 {
+  margin: 0;
+}
+
+.compact-theme-form {
+  margin-top: 0.75rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+}
+
+.home-theme-asset-item img {
+  width: 100%;
+  max-width: 260px;
+  border: 1px solid #dce3eb;
+  border-radius: 8px;
+}
+
+.home-slot-preview-wrap {
+  width: 100%;
+  max-width: 220px;
+  aspect-ratio: 1 / 1;
+  border: 1px dashed #c8d4e5;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f5f8ff;
+}
+
+.home-slot-preview-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.home-slot-preview-placeholder {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: #4f6072;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.slot-assign-form {
+  margin-top: 0.65rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.slot-assign-form label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.slot-assign-form select {
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #c8d4e5;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
 .user-admin-item {
   border: 1px solid #dce3eb;
   border-radius: 8px;
@@ -702,6 +825,10 @@
   }
 
   .compact-gallery-form {
+    grid-template-columns: 1fr;
+  }
+
+  .compact-theme-form {
     grid-template-columns: 1fr;
   }
 

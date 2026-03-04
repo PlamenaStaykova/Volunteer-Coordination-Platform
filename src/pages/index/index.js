@@ -2,7 +2,11 @@ import "./index.css";
 import pageHtml from "./index.html?raw";
 import { renderHeader } from "../../components/header/header.js";
 import { renderFooter } from "../../components/footer/footer.js";
-import { getHomeGalleryImages, getPublicCampaignOverview } from "../../lib/supabase.js";
+import {
+  getCampaignCoverPublicUrl,
+  getPublicCampaignCoverPaths,
+  getPublicCampaignOverview,
+} from "../../lib/supabase.js";
 
 function formatDateTime(value) {
   const date = new Date(value);
@@ -52,47 +56,13 @@ export async function renderIndexPage(mountNode) {
   pageContainer.innerHTML = pageHtml;
   mountNode.append(pageContainer.firstElementChild);
 
-  const homeGalleryList = mountNode.querySelector("#homeGalleryList");
   const publicCampaignSearchInput = mountNode.querySelector("#publicCampaignSearchInput");
   const publicCampaignList = mountNode.querySelector("#publicCampaignList");
   const publicCampaignEmpty = mountNode.querySelector("#publicCampaignEmpty");
   const publicCampaignError = mountNode.querySelector("#publicCampaignError");
   let publicCampaigns = [];
+  let campaignCoverPathById = new Map();
   let searchQuery = "";
-
-  const { data: galleryImages } = await getHomeGalleryImages();
-  homeGalleryList.innerHTML = "";
-  if ((galleryImages ?? []).length > 0) {
-    for (const [index, image] of galleryImages.entries()) {
-      const item = document.createElement("article");
-      item.className = `gallery-item ${index === 0 ? "gallery-item-wide" : ""}`;
-      item.innerHTML = `
-        <div class="gallery-photo-wrap">
-          <img src="${image.image_url}" alt="${image.title || "Volunteer campaign image"}" loading="lazy" />
-          <span>${image.title || "Campaign Moment"}</span>
-        </div>
-      `;
-      homeGalleryList.append(item);
-    }
-  } else {
-    const placeholders = [
-      "Community Cleanup Day",
-      "Food Drive Support",
-      "Youth Mentorship Program",
-      "Senior Care Visit",
-      "Disaster Relief Logistics",
-    ];
-    for (const [index, title] of placeholders.entries()) {
-      const item = document.createElement("article");
-      item.className = `gallery-item ${index === 0 ? "gallery-item-wide" : ""}`;
-      item.innerHTML = `
-        <div class="gallery-placeholder">
-          <span>${title}</span>
-        </div>
-      `;
-      homeGalleryList.append(item);
-    }
-  }
 
   const renderPublicCampaigns = () => {
     const normalizedSearch = normalizeSearchQuery(searchQuery);
@@ -111,8 +81,17 @@ export async function renderIndexPage(mountNode) {
       item.className = "public-campaign-item";
       const state = campaign.state === "paused" ? "paused" : campaign.state === "ended" ? "ended" : "ongoing";
       const stateLabel = state === "ended" ? "Ended" : state === "paused" ? "Paused" : "Ongoing";
+      const coverImagePath = campaignCoverPathById.get(campaign.id) || "";
+      const coverImageUrl = getCampaignCoverPublicUrl(coverImagePath);
       item.innerHTML = `
         <article class="public-campaign-card">
+          <div class="public-campaign-avatar-wrap">
+            ${
+              coverImageUrl
+                ? `<img src="${coverImageUrl}" alt="${campaign.title}" loading="lazy" />`
+                : `<div class="public-campaign-avatar-empty">No avatar uploaded</div>`
+            }
+          </div>
           <header class="public-campaign-head">
             <h3><a href="/campaign/${campaign.id}">${campaign.title}</a></h3>
             <span class="public-campaign-state is-${state}">
@@ -144,6 +123,9 @@ export async function renderIndexPage(mountNode) {
   } else {
     publicCampaignError.hidden = true;
     publicCampaigns = data ?? [];
+    const campaignIds = publicCampaigns.map((campaign) => campaign.id).filter(Boolean);
+    const { data: coverRows } = await getPublicCampaignCoverPaths(campaignIds);
+    campaignCoverPathById = new Map((coverRows ?? []).map((row) => [row.id, row.cover_image_path || ""]));
     renderPublicCampaigns();
   }
 
