@@ -109,14 +109,31 @@ function getCampaignStateMeta(state) {
   return { label: "Open", className: "is-open" };
 }
 
-function getEventStatusMeta(status) {
+function getCampaignOverviewStatusMeta(status) {
   if (status === "done") {
-    return { label: "Done", className: "is-done" };
+    return { label: "ENDED", className: "is-ended" };
   }
   if (status === "paused") {
-    return { label: "Paused", className: "is-paused" };
+    return { label: "PAUSED", className: "is-paused" };
   }
-  return { label: "Open", className: "is-open" };
+  return { label: "ONGOING", className: "is-ongoing" };
+}
+
+function getCampaignInitials(title) {
+  const words = String(title || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (words.length === 0) {
+    return "CP";
+  }
+
+  if (words.length === 1) {
+    return words[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${words[0][0]}${words[1][0]}`.toUpperCase();
 }
 
 function getFilterPredicate(filter, context = {}) {
@@ -1197,10 +1214,11 @@ export async function renderDashboardPage(mountNode) {
     for (const campaign of filteredOrganizerCampaigns) {
       const item = document.createElement("li");
       item.className = "organizer-campaign-item";
-      const statusMeta = getEventStatusMeta(campaign.status);
+      const overviewStatusMeta = getCampaignOverviewStatusMeta(campaign.status);
       const requiredSkills = normalizeVolunteerSkills(campaign.required_skills || []);
       const coverImagePath = String(campaign.cover_image_path || "").trim();
       const coverImageUrl = getCampaignCoverPublicUrl(coverImagePath);
+      const campaignInitials = getCampaignInitials(campaign.title);
       const requiredSkillsEditorOptions = VOLUNTEER_SKILLS.map(
         (skill) => `
           <label class="admin-skill-option">
@@ -1235,15 +1253,42 @@ export async function renderDashboardPage(mountNode) {
         .filter((volunteer) => requiredSkills.length === 0 || volunteer.matchingSkills.length > 0);
 
       item.innerHTML = `
-        <div class="campaign-title-row">
-          <h4>${campaign.title}</h4>
-          <button type="button" class="icon-btn" data-action="toggle-edit" aria-label="Edit campaign">&#9998;</button>
+        <div class="organizer-campaign-overview">
+          <div class="organizer-campaign-layout">
+            <div class="organizer-campaign-main">
+              <div class="campaign-title-row">
+                <h4><a class="organizer-campaign-title-link" href="/campaign/?id=${campaign.id}">${campaign.title}</a></h4>
+                <button type="button" class="icon-btn" data-action="toggle-edit" aria-label="Edit campaign">&#9998;</button>
+              </div>
+              <p class="organizer-campaign-status-line">
+                <strong>Campaign Status:</strong>
+                <span class="campaign-overview-status ${overviewStatusMeta.className}">${overviewStatusMeta.label}</span>
+              </p>
+              <p class="organizer-campaign-meta"><strong>Location:</strong> ${campaign.location}</p>
+              <p class="organizer-campaign-meta"><strong>Dates:</strong> ${formatDateTime(campaign.start_at)} - ${formatDateTime(campaign.end_at)}</p>
+              <p class="organizer-campaign-meta"><strong>Required Skills:</strong> ${requiredSkillsSummary}</p>
+              <p class="organizer-campaign-description">${campaign.description}</p>
+              <div class="organizer-campaign-metrics">
+                <p><strong>Max Volunteers:</strong> ${campaign.capacity || 10}</p>
+                <p><strong>Volunteers Invited:</strong> ${invitedSummary}</p>
+                <p><strong>Volunteer Applications:</strong> ${appliedSummary}</p>
+              </div>
+            </div>
+            <aside class="organizer-campaign-avatar-panel" aria-label="Campaign avatar">
+              <p class="organizer-campaign-avatar-title">Campaign Avatar</p>
+              <div class="organizer-campaign-avatar-wrap">
+                ${
+                  coverImageUrl
+                    ? `<img src="${coverImageUrl}" alt="${campaign.title}" loading="lazy" />`
+                    : `<div class="organizer-campaign-avatar-empty">
+                        <p class="organizer-campaign-avatar-initials">${campaignInitials}</p>
+                        <p class="organizer-campaign-avatar-note">No avatar uploaded.</p>
+                      </div>`
+                }
+              </div>
+            </aside>
+          </div>
         </div>
-        <p><strong>Status:</strong> <span class="campaign-status ${statusMeta.className}">${statusMeta.label}</span></p>
-        <p><strong>Dates:</strong> ${formatDateTime(campaign.start_at)} - ${formatDateTime(campaign.end_at)}</p>
-        <p><strong>Required Skills:</strong> ${requiredSkillsSummary}</p>
-        <p><strong>Volunteers Invited:</strong> ${invitedSummary}</p>
-        <p><strong>Volunteer Applications:</strong> ${appliedSummary}</p>
         <form class="admin-form campaign-invite-form" data-action="invite-form">
           <label>
             Invite Volunteer
@@ -1256,14 +1301,6 @@ export async function renderDashboardPage(mountNode) {
           </div>
         </form>
         <div class="campaign-avatar-tools">
-          <p><strong>Campaign Avatar:</strong></p>
-          <div class="campaign-avatar-preview-wrap">
-            ${
-              coverImageUrl
-                ? `<img src="${coverImageUrl}" alt="${campaign.title}" loading="lazy" />`
-                : `<div class="campaign-avatar-placeholder">No avatar uploaded.</div>`
-            }
-          </div>
           <label class="campaign-avatar-input-label">
             Select Image
             <input data-action="campaign-avatar-input" class="campaign-avatar-input" type="file" accept="image/*" />
