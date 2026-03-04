@@ -128,7 +128,7 @@ function toCampaignPayloadFromForm(formData) {
 }
 
 export async function renderCampaignPage(mountNode, params = {}) {
-  const user = await requireAuth("/auth");
+  const user = await requireAuth("/auth/");
   if (!user) {
     return;
   }
@@ -584,7 +584,7 @@ export async function renderCampaignPage(mountNode, params = {}) {
 
   if (isCreateMode) {
     if (!canManageCampaigns) {
-      window.location.href = "/dashboard";
+      window.location.href = "/dashboard/";
       return;
     }
 
@@ -625,7 +625,7 @@ export async function renderCampaignPage(mountNode, params = {}) {
 
       campaignId = data.id;
       isCreateMode = false;
-      window.history.replaceState({}, "", `/campaign/${campaignId}`);
+      window.history.replaceState({}, "", `/campaign/?id=${campaignId}`);
       setInlineMessage(createCampaignMessage, "Campaign created successfully.", "success");
       campaignCreate.hidden = true;
       await loadCampaign();
@@ -711,7 +711,7 @@ export async function renderCampaignPage(mountNode, params = {}) {
       return;
     }
 
-    window.location.href = "/dashboard";
+    window.location.href = "/dashboard/";
   });
 
   assignVolunteerForm.addEventListener("submit", async (event) => {

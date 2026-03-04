@@ -46,7 +46,7 @@ function setInlineMessage(element, message, type = "error") {
 }
 
 export async function renderProfilePage(mountNode) {
-  const user = await requireAuth("/auth");
+  const user = await requireAuth("/auth/");
   if (!user) {
     return;
   }

@@ -10,7 +10,7 @@ export function hasRole(userRole, requiredRole) {
   return userRole === requiredRole;
 }
 
-export async function requireAuth(redirectTo = "/auth") {
+export async function requireAuth(redirectTo = "/auth/") {
   const user = await getCurrentUser();
   if (!user) {
     window.location.href = redirectTo;
@@ -19,8 +19,8 @@ export async function requireAuth(redirectTo = "/auth") {
   return user;
 }
 
-export async function requireRole(requiredRole, redirectTo = "/dashboard") {
-  const user = await requireAuth("/auth");
+export async function requireRole(requiredRole, redirectTo = "/dashboard/") {
+  const user = await requireAuth("/auth/");
   if (!user) {
     return null;
   }

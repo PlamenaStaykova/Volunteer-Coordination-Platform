@@ -10,7 +10,12 @@ It supports public visitors and authenticated users with role-based access.
 - Admin: can oversee all users and campaigns, manage user accounts/roles, edit volunteer/campaign skills, and manage home-page gallery images.
 
 ## Architecture Overview
-- Frontend: Vite + vanilla JavaScript, configured as a multipage build (`index.html` and `dashboard/index.html`) with client-side routing in `src/router.js`.
+- Frontend: Vite + vanilla JavaScript, configured as a true multipage build with separate entries:
+  - `/` -> `index.html`
+  - `/auth/` -> `auth/index.html`
+  - `/dashboard/` -> `dashboard/index.html`
+  - `/profile/` -> `profile/index.html`
+  - `/campaign/` -> `campaign/index.html`
 - Backend/Platform: Supabase
   - Auth: email/password authentication with unified `Log In / Register` flow.
   - Database: PostgreSQL tables, SQL migrations, and RPC functions.
@@ -124,8 +129,11 @@ erDiagram
    - `http://localhost:5173`
 
 ## Key Folders/Files
-- `src/main.js` - app bootstrap
-- `src/router.js` - client route mapping
+- `src/home-entry.js` - home page bootstrap
+- `src/auth-entry.js` - auth page bootstrap
+- `src/dashboard-entry.js` - dashboard page bootstrap
+- `src/profile-entry.js` - profile page bootstrap
+- `src/campaign-entry.js` - campaign page bootstrap
 - `src/lib/supabase.js` - Supabase client + data/auth API calls
 - `src/pages/index/` - public home page
 - `src/pages/auth/` - unified login/register UI
@@ -160,8 +168,7 @@ The repository now includes hosting config for both providers:
 4. Deploy.
 
 ## Live Deployment URL
-- Netlify: `https://<your-site-name>.netlify.app`
-- Vercel: `https://<your-project>.vercel.app`
+- Netlify: `https://volunteercoordinationplatform.netlify.app/`
 
 ## Demo Credentials
 For local/demo environments only:

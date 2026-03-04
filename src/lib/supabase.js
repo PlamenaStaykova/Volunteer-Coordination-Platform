@@ -787,14 +787,7 @@ const profileSelectColumns = [
 ].join(", ");
 
 export function getDashboardPathForRole(role) {
-  const normalizedRole = normalizeAuthRole(role);
-  if (normalizedRole === "admin") {
-    return "/dashboard/admin";
-  }
-  if (normalizedRole === "organizer") {
-    return "/dashboard/organizer";
-  }
-  return "/dashboard/volunteer";
+  return "/dashboard/";
 }
 
 export async function getAuthRole(user = null) {

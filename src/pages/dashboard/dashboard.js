@@ -2,7 +2,7 @@ import "./dashboard.css";
 import pageHtml from "./dashboard.html?raw";
 import { renderHeader } from "../../components/header/header.js";
 import { renderFooter } from "../../components/footer/footer.js";
-import { requireAuth, requireRole } from "../../lib/guards.js";
+import { requireAuth } from "../../lib/guards.js";
 import {
   getAdminDashboardOverview,
   adminCreateUser,
@@ -224,7 +224,7 @@ function createAdminCampaignLinksCell(campaigns = []) {
       if (campaign?.id) {
         const link = document.createElement("a");
         link.className = "admin-campaign-link";
-        link.href = `/campaign/${campaign.id}`;
+        link.href = `/campaign/?id=${campaign.id}`;
         link.textContent = campaignTitle;
         row.append(link);
       } else {
@@ -329,7 +329,7 @@ function renderCampaignList(campaigns, mountNode, context) {
     item.innerHTML = `
       <article class="campaign-card">
         <header class="campaign-header">
-          <h3><a class="campaign-title-link" href="/campaign/${campaign.id}">${campaign.title}</a></h3>
+          <h3><a class="campaign-title-link" href="/campaign/?id=${campaign.id}">${campaign.title}</a></h3>
           <span class="campaign-status ${statusMeta.className}">${statusMeta.label}</span>
         </header>
         <p class="campaign-org"><strong>Organization:</strong> ${campaign.organization}</p>
@@ -386,20 +386,7 @@ function renderCampaignList(campaigns, mountNode, context) {
 }
 
 export async function renderDashboardPage(mountNode) {
-  const normalizedPath = window.location.pathname.endsWith("/")
-    ? window.location.pathname.slice(0, -1)
-    : window.location.pathname;
-  let user = null;
-
-  if (normalizedPath === "/dashboard/admin") {
-    user = await requireRole("admin", "/dashboard");
-  } else if (normalizedPath === "/dashboard/organizer") {
-    user = await requireRole("organizer", "/dashboard");
-  } else if (normalizedPath === "/dashboard/volunteer") {
-    user = await requireRole("volunteer", "/dashboard");
-  } else {
-    user = await requireAuth("/auth");
-  }
+  const user = await requireAuth("/auth/");
 
   if (!user) {
     return;

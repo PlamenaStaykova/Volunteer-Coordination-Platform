@@ -93,7 +93,7 @@ export async function renderIndexPage(mountNode) {
             }
           </div>
           <header class="public-campaign-head">
-            <h3><a href="/campaign/${campaign.id}">${campaign.title}</a></h3>
+            <h3><a href="/campaign/?id=${campaign.id}">${campaign.title}</a></h3>
             <span class="public-campaign-state is-${state}">
               ${stateLabel}
             </span>
