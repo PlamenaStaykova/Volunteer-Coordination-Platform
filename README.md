@@ -14,12 +14,19 @@ It supports public visitors and authenticated users with role-based access.
   - `/` -> `index.html`
   - `/auth/` -> `auth/index.html`
   - `/dashboard/` -> `dashboard/index.html`
+  - `/dashboard/total` -> `dashboard/total/index.html`
+  - `/dashboard/ongoing` -> `dashboard/ongoing/index.html`
+  - `/dashboard/paused` -> `dashboard/paused/index.html`
+  - `/dashboard/ended` -> `dashboard/ended/index.html`
   - `/profile/` -> `profile/index.html`
   - `/campaign/` -> `campaign/index.html`
 - Backend/Platform: Supabase
   - Auth: email/password authentication with unified `Log In / Register` flow.
   - Database: PostgreSQL tables, SQL migrations, and RPC functions.
-  - Storage: `home-gallery` bucket for home page images.
+  - Storage:
+    - `home-gallery` (home gallery + theme assets)
+    - `event-covers` (campaign avatars)
+    - `attendance-proofs` (profile avatars)
   - Security: Row Level Security (RLS) policies on core tables and admin-only RPC authorization checks.
 
 ## Database Schema Diagram (Mermaid ERD)
@@ -147,8 +154,8 @@ erDiagram
 
 ## Deployment (Netlify / Vercel)
 The repository now includes hosting config for both providers:
-- `netlify.toml` (Netlify build + SPA redirect)
-- `vercel.json` (Vercel SPA rewrite)
+- `netlify.toml` (Netlify build settings)
+- `vercel.json` (Vercel routing/build settings)
 
 ### Netlify (recommended)
 1. Connect this GitHub repository in Netlify.
@@ -169,6 +176,12 @@ The repository now includes hosting config for both providers:
 
 ## Live Deployment URL
 - Netlify: `https://volunteercoordinationplatform.netlify.app/`
+
+### Dashboard Filter URLs
+- Total: `https://volunteercoordinationplatform.netlify.app/dashboard/total`
+- Ongoing: `https://volunteercoordinationplatform.netlify.app/dashboard/ongoing`
+- Paused: `https://volunteercoordinationplatform.netlify.app/dashboard/paused`
+- Ended: `https://volunteercoordinationplatform.netlify.app/dashboard/ended`
 
 ## Demo Credentials
 For local/demo environments only:
