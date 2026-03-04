@@ -186,6 +186,8 @@ export async function renderCampaignPage(mountNode, params = {}) {
   const leaveCampaignBtn = mountNode.querySelector("#leaveCampaignBtn");
   const campaignAdminTools = mountNode.querySelector("#campaignAdminTools");
   const campaignInlineEditor = mountNode.querySelector("#campaignInlineEditor");
+  const campaignSkillsForm = mountNode.querySelector("#campaignSkillsForm");
+  const campaignSkillsEditorGrid = mountNode.querySelector("#campaignSkillsEditorGrid");
   const pauseCampaignBtn = mountNode.querySelector("#pauseCampaignBtn");
   const toggleCampaignStatusBtn = mountNode.querySelector("#toggleCampaignStatusBtn");
   const deleteCampaignBtn = mountNode.querySelector("#deleteCampaignBtn");
@@ -358,6 +360,37 @@ export async function renderCampaignPage(mountNode, params = {}) {
     }
     return normalizeSkillValues(
       [...createCampaignSkillsGrid.querySelectorAll('input[name="createCampaignRequiredSkills"]:checked')].map(
+        (input) => input.value
+      )
+    );
+  };
+
+  const renderCampaignSkillsEditor = (selectedSkills = []) => {
+    if (!campaignSkillsEditorGrid) {
+      return;
+    }
+
+    const selectedSet = new Set(normalizeSkillValues(selectedSkills));
+    campaignSkillsEditorGrid.innerHTML = "";
+    for (const skill of VOLUNTEER_SKILLS) {
+      const label = document.createElement("label");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.name = "campaignRequiredSkills";
+      checkbox.value = skill;
+      checkbox.checked = selectedSet.has(skill);
+      label.append(checkbox, document.createTextNode(skill));
+      campaignSkillsEditorGrid.append(label);
+    }
+  };
+
+  const getCampaignRequiredSkillsFromEditor = () => {
+    if (!campaignSkillsEditorGrid) {
+      return [];
+    }
+
+    return normalizeSkillValues(
+      [...campaignSkillsEditorGrid.querySelectorAll('input[name="campaignRequiredSkills"]:checked')].map(
         (input) => input.value
       )
     );
@@ -651,6 +684,7 @@ export async function renderCampaignPage(mountNode, params = {}) {
 
     if (canManage) {
       renderInlineEditorRows();
+      renderCampaignSkillsEditor(requiredSkills);
       pauseCampaignBtn.hidden = campaignData.status === "done";
       pauseCampaignBtn.textContent = campaignData.status === "paused" ? "Resume Campaign" : "Pause Campaign";
       toggleCampaignStatusBtn.textContent = campaignData.status === "done" ? "Reopen Campaign" : "Mark Campaign Done";
@@ -705,6 +739,9 @@ export async function renderCampaignPage(mountNode, params = {}) {
       await renderApplications();
     } else if (campaignInlineEditor) {
       campaignInlineEditor.innerHTML = "";
+      if (campaignSkillsEditorGrid) {
+        campaignSkillsEditorGrid.innerHTML = "";
+      }
       cancelActiveInlineEdit = null;
       inviteRequiredSkills = [];
       inviteVolunteerMetaById = new Map();
@@ -877,6 +914,48 @@ export async function renderCampaignPage(mountNode, params = {}) {
 
     setInlineMessage(campaignActionMessage, "Volunteer invited.", "success");
     await loadCampaign();
+  });
+
+  campaignSkillsForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!campaignData) {
+      return;
+    }
+
+    const payload = toCampaignPayloadFromForm({
+      title: campaignData.title,
+      description: campaignData.description,
+      location: campaignData.location,
+      startAt: toDateInputValue(campaignData.start_at),
+      endAt: toDateInputValue(campaignData.end_at),
+      capacity: String(campaignData.max_volunteers ?? 0),
+    });
+
+    if (!payload || payload.capacity <= 0 || payload.end_at <= payload.start_at) {
+      setInlineMessage(campaignActionMessage, "Campaign data is invalid. Refresh and try again.");
+      return;
+    }
+
+    payload.required_skills = getCampaignRequiredSkillsFromEditor();
+    const submitButton = campaignSkillsForm.querySelector('button[type="submit"]');
+    if (submitButton) {
+      submitButton.disabled = true;
+    }
+
+    try {
+      const { error } = await updateCampaignWithShift(campaignId, payload);
+      if (error) {
+        setInlineMessage(campaignActionMessage, error.message || "Unable to update required skills.");
+        return;
+      }
+
+      setInlineMessage(campaignActionMessage, "Required skills updated.", "success");
+      await loadCampaign();
+    } finally {
+      if (submitButton) {
+        submitButton.disabled = false;
+      }
+    }
   });
 
   if (!isCreateMode) {
