@@ -1290,6 +1290,7 @@ export async function getCampaignById(campaignId) {
   return {
     data: {
       ...event,
+      cover_image_url: getCampaignCoverPublicUrl(event.cover_image_path),
       organization: organizerProfile?.organization_name || organizerProfile?.display_name || "Unknown Organization",
       max_volunteers: maxVolunteers,
       vacancies: vacancies ?? 0,

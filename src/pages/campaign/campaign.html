@@ -41,16 +41,30 @@
 
     <section id="campaignDetail" class="campaign-detail" hidden>
       <p class="campaign-back-link"><a href="/dashboard/">Back to Dashboard</a></p>
-      <h1 id="campaignTitle"></h1>
-      <p id="campaignStatus" class="campaign-status-line"></p>
-      <p id="campaignOrg" class="campaign-detail-meta"></p>
-      <p id="campaignLocation" class="campaign-detail-meta"></p>
-      <p id="campaignDates" class="campaign-detail-meta"></p>
-      <p id="campaignSkills" class="campaign-detail-meta"></p>
-      <p id="campaignDescription" class="campaign-description"></p>
-      <div class="campaign-detail-metrics">
-        <p><strong>Max Volunteers:</strong> <span id="campaignMaxVolunteers"></span></p>
-        <p><strong>Vacancies:</strong> <span id="campaignVacancies"></span></p>
+      <div class="campaign-detail-layout">
+        <div class="campaign-detail-main">
+          <h1 id="campaignTitle"></h1>
+          <p id="campaignStatus" class="campaign-status-line"></p>
+          <p id="campaignOrg" class="campaign-detail-meta"></p>
+          <p id="campaignLocation" class="campaign-detail-meta"></p>
+          <p id="campaignDates" class="campaign-detail-meta"></p>
+          <p id="campaignSkills" class="campaign-detail-meta"></p>
+          <p id="campaignDescription" class="campaign-description"></p>
+          <div class="campaign-detail-metrics">
+            <p><strong>Max Volunteers:</strong> <span id="campaignMaxVolunteers"></span></p>
+            <p><strong>Vacancies:</strong> <span id="campaignVacancies"></span></p>
+          </div>
+        </div>
+        <aside class="campaign-avatar-panel" aria-label="Campaign avatar">
+          <p class="campaign-avatar-title">Campaign Avatar</p>
+          <div class="campaign-avatar-wrap">
+            <img id="campaignAvatarImage" alt="Campaign avatar" hidden />
+            <div id="campaignAvatarPlaceholder" class="campaign-avatar-placeholder">
+              <p id="campaignAvatarInitials" class="campaign-avatar-initials">CP</p>
+              <p class="campaign-avatar-note">No campaign avatar uploaded.</p>
+            </div>
+          </div>
+        </aside>
       </div>
 
       <div id="volunteerActions" class="campaign-actions" hidden>

@@ -8,6 +8,7 @@ import {
   assignVolunteerToCampaign,
   cancelCampaignApplication,
   deleteCampaign,
+  getCampaignCoverPublicUrl,
   getCampaignApplications,
   getCampaignById,
   getIsAdmin,
@@ -87,6 +88,23 @@ function getCampaignStatusMeta(status) {
   return { label: "ONGOING", className: "is-ongoing" };
 }
 
+function getCampaignInitials(title) {
+  const words = String(title || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (words.length === 0) {
+    return "CP";
+  }
+
+  if (words.length === 1) {
+    return words[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${words[0][0]}${words[1][0]}`.toUpperCase();
+}
+
 function setInlineMessage(element, message, type = "error") {
   if (!element) {
     return;
@@ -159,6 +177,9 @@ export async function renderCampaignPage(mountNode, params = {}) {
   const descriptionEl = mountNode.querySelector("#campaignDescription");
   const maxVolunteersEl = mountNode.querySelector("#campaignMaxVolunteers");
   const vacanciesEl = mountNode.querySelector("#campaignVacancies");
+  const campaignAvatarImage = mountNode.querySelector("#campaignAvatarImage");
+  const campaignAvatarPlaceholder = mountNode.querySelector("#campaignAvatarPlaceholder");
+  const campaignAvatarInitials = mountNode.querySelector("#campaignAvatarInitials");
   const campaignActionMessage = mountNode.querySelector("#campaignActionMessage");
   const volunteerActions = mountNode.querySelector("#volunteerActions");
   const joinCampaignBtn = mountNode.querySelector("#joinCampaignBtn");
@@ -178,6 +199,42 @@ export async function renderCampaignPage(mountNode, params = {}) {
   const canManageCampaigns = userType === "organizer" || isAdmin;
   let campaignData = null;
   let cancelActiveInlineEdit = null;
+
+  const renderCampaignAvatar = (coverImagePath, campaignTitle) => {
+    const initials = getCampaignInitials(campaignTitle);
+    if (campaignAvatarInitials) {
+      campaignAvatarInitials.textContent = initials;
+    }
+
+    const avatarUrl = getCampaignCoverPublicUrl(coverImagePath);
+    if (!avatarUrl) {
+      if (campaignAvatarImage) {
+        campaignAvatarImage.hidden = true;
+        campaignAvatarImage.removeAttribute("src");
+      }
+      if (campaignAvatarPlaceholder) {
+        campaignAvatarPlaceholder.hidden = false;
+      }
+      return;
+    }
+
+    if (campaignAvatarImage) {
+      campaignAvatarImage.src = avatarUrl;
+      campaignAvatarImage.alt = campaignTitle ? `${campaignTitle} avatar` : "Campaign avatar";
+      campaignAvatarImage.hidden = false;
+    }
+    if (campaignAvatarPlaceholder) {
+      campaignAvatarPlaceholder.hidden = true;
+    }
+  };
+
+  campaignAvatarImage?.addEventListener("error", () => {
+    campaignAvatarImage.hidden = true;
+    campaignAvatarImage.removeAttribute("src");
+    if (campaignAvatarPlaceholder) {
+      campaignAvatarPlaceholder.hidden = false;
+    }
+  });
 
   const renderApplications = async () => {
     applicationsList.innerHTML = "";
@@ -526,6 +583,13 @@ export async function renderCampaignPage(mountNode, params = {}) {
     descriptionEl.textContent = campaignData.description;
     maxVolunteersEl.textContent = String(campaignData.max_volunteers);
     vacanciesEl.textContent = String(campaignData.vacancies);
+    const avatarSource =
+      campaignData.cover_image_path ||
+      campaignData.cover_image_url ||
+      campaignData.avatar_url ||
+      campaignData.image_url ||
+      "";
+    renderCampaignAvatar(avatarSource, campaignData.title);
     campaignDetail.hidden = false;
 
     const canManage = isAdmin || (userType === "organizer" && campaignData.created_by === user.id);
