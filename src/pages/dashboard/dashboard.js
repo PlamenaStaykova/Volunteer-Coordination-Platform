@@ -60,6 +60,7 @@ const HOME_SLOT_FALLBACKS = [
   { slot_key: "health_outreach", slot_label: "Health Outreach", slot_order: 3 },
   { slot_key: "emergency_response", slot_label: "Emergency Response", slot_order: 4 },
 ];
+const DASHBOARD_PATH_FILTERS = new Set(["total", "ongoing", "paused", "ended"]);
 
 function formatDateTime(value) {
   const date = new Date(value);
@@ -150,6 +151,45 @@ function getFilterPredicate(filter, context = {}) {
     return (campaign) => campaign.state === "done";
   }
   return () => true;
+}
+
+function normalizeDashboardPath(pathname) {
+  const normalizedPath = String(pathname || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\/+$/, "");
+
+  return normalizedPath || "/";
+}
+
+function resolveDashboardFilterFromPath(pathname) {
+  const normalizedPath = normalizeDashboardPath(pathname);
+  if (normalizedPath === "/dashboard/ongoing") {
+    return "ongoing";
+  }
+  if (normalizedPath === "/dashboard/paused") {
+    return "paused";
+  }
+  if (normalizedPath === "/dashboard/ended") {
+    return "ended";
+  }
+  if (normalizedPath === "/dashboard/total") {
+    return "total";
+  }
+  return "total";
+}
+
+function getDashboardPathForFilter(filter) {
+  if (filter === "ongoing") {
+    return "/dashboard/ongoing";
+  }
+  if (filter === "paused") {
+    return "/dashboard/paused";
+  }
+  if (filter === "ended") {
+    return "/dashboard/ended";
+  }
+  return "/dashboard/total";
 }
 
 function getCampaignStatusMessage(state) {
@@ -404,7 +444,7 @@ function renderCampaignList(campaigns, mountNode, context) {
   }
 }
 
-export async function renderDashboardPage(mountNode) {
+export async function renderDashboardPage(mountNode, options = {}) {
   const user = await requireAuth("/auth/");
 
   if (!user) {
@@ -519,7 +559,10 @@ export async function renderDashboardPage(mountNode) {
   let homeGalleryImages = [];
   let homeThemeAssets = [];
   let homeCampaignSlots = [];
-  let activeFilter = "total";
+  const requestedInitialFilter = String(options?.initialFilter || resolveDashboardFilterFromPath(window.location.pathname))
+    .trim()
+    .toLowerCase();
+  let activeFilter = DASHBOARD_PATH_FILTERS.has(requestedInitialFilter) ? requestedInitialFilter : "total";
   let adminUserFilter = "organizer";
   let searchQuery = "";
   const filterTabsByFilter = new Map();
@@ -686,6 +729,34 @@ export async function renderDashboardPage(mountNode) {
     setFilterCounter("paused", paused);
     setFilterCounter("ended", ended);
     setFilterCounter("my-campaigns", myCampaigns);
+  };
+
+  const syncActiveFilterTabs = () => {
+    for (const tab of filterTabs) {
+      tab.classList.remove("is-active");
+    }
+    const tabsForActiveFilter = filterTabsByFilter.get(activeFilter) ?? [];
+    for (const tab of tabsForActiveFilter) {
+      tab.classList.add("is-active");
+    }
+  };
+
+  const updateDashboardPathForFilter = (filter, replace = false) => {
+    if (!DASHBOARD_PATH_FILTERS.has(filter)) {
+      return;
+    }
+
+    const targetPath = getDashboardPathForFilter(filter);
+    if (normalizeDashboardPath(window.location.pathname) === targetPath) {
+      return;
+    }
+
+    if (replace) {
+      window.history.replaceState({}, "", targetPath);
+      return;
+    }
+
+    window.history.pushState({}, "", targetPath);
   };
 
   const renderHomeGalleryAdminList = () => {
@@ -1723,6 +1794,30 @@ export async function renderDashboardPage(mountNode) {
     });
   };
 
+  const setActiveFilter = (nextFilter, options = {}) => {
+    const normalizedFilter = String(nextFilter || "total").trim().toLowerCase();
+    const allowedFilter =
+      normalizedFilter === "my-campaigns"
+        ? isVolunteer
+          ? "my-campaigns"
+          : "total"
+        : DASHBOARD_PATH_FILTERS.has(normalizedFilter)
+          ? normalizedFilter
+          : "total";
+
+    activeFilter = allowedFilter;
+    syncActiveFilterTabs();
+
+    if (canManageCampaigns) {
+      renderOrganizerCampaigns();
+    }
+    applyFilter();
+
+    if (options?.updateUrl) {
+      updateDashboardPathForFilter(activeFilter, Boolean(options?.replaceUrl));
+    }
+  };
+
   const loadCampaignData = async () => {
     const { data, error } = await getCampaignDashboardData();
     if (error) {
@@ -1827,15 +1922,16 @@ export async function renderDashboardPage(mountNode) {
 
   filterTabs.forEach((tab) => {
     tab.addEventListener("click", () => {
-      activeFilter = tab.dataset.filter || "total";
-      filterTabs.forEach((otherTab) => otherTab.classList.remove("is-active"));
-      tab.classList.add("is-active");
-      if (canManageCampaigns) {
-        renderOrganizerCampaigns();
-      }
-      applyFilter();
+      setActiveFilter(tab.dataset.filter || "total", { updateUrl: true });
     });
   });
+
+  window.addEventListener("popstate", () => {
+    const filterFromPath = resolveDashboardFilterFromPath(window.location.pathname);
+    setActiveFilter(filterFromPath, { updateUrl: false });
+  });
+
+  syncActiveFilterTabs();
 
   const runDashboardSearch = () => {
     searchQuery = dashboardSearchInput?.value || "";
