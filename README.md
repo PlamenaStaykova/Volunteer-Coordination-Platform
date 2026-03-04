@@ -176,9 +176,11 @@ For local/demo environments only:
 - Volunteer:
   - Email: `peter@gmail.com`
   - Password: `123456`
-- Organizer/Admin:
+- Admin:
   - Email: `plamena@gmail.com`
   - Password: `123456`
-  - Notes: seeded as organizer; admin privileges are granted by migration/bootstrap.
+- Organizer:
+  - Email: `lili@gmail.com`
+  - Password: `123456`
 
 > Important: rotate/remove demo credentials before production use.
