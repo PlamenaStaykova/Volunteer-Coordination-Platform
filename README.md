@@ -173,14 +173,14 @@ The repository now includes hosting config for both providers:
 ## Demo Credentials
 For local/demo environments only:
 
-- Volunteer:
-  - Email: `peter@gmail.com`
-  - Password: `123456`
 - Admin:
   - Email: `plamena@gmail.com`
   - Password: `123456`
 - Organizer:
   - Email: `lili@gmail.com`
+  - Password: `123456`
+- Volunteer:
+  - Email: `peter@gmail.com`
   - Password: `123456`
 
 > Important: rotate/remove demo credentials before production use.
