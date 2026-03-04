@@ -191,6 +191,9 @@ export async function renderCampaignPage(mountNode, params = {}) {
   const deleteCampaignBtn = mountNode.querySelector("#deleteCampaignBtn");
   const assignVolunteerForm = mountNode.querySelector("#assignVolunteerForm");
   const assignVolunteerSelect = mountNode.querySelector("#assignVolunteerSelect");
+  const assignVolunteerSkillsPanel = mountNode.querySelector("#assignVolunteerSkillsPanel");
+  const assignVolunteerSkillsHint = mountNode.querySelector("#assignVolunteerSkillsHint");
+  const assignVolunteerSkillsList = mountNode.querySelector("#assignVolunteerSkillsList");
   const applicationsList = mountNode.querySelector("#applicationsList");
   const applicationsEmpty = mountNode.querySelector("#applicationsEmpty");
 
@@ -199,6 +202,8 @@ export async function renderCampaignPage(mountNode, params = {}) {
   const canManageCampaigns = userType === "organizer" || isAdmin;
   let campaignData = null;
   let cancelActiveInlineEdit = null;
+  let inviteRequiredSkills = [];
+  let inviteVolunteerMetaById = new Map();
 
   const renderCampaignAvatar = (coverImagePath, campaignTitle) => {
     const initials = getCampaignInitials(campaignTitle);
@@ -234,6 +239,55 @@ export async function renderCampaignPage(mountNode, params = {}) {
     if (campaignAvatarPlaceholder) {
       campaignAvatarPlaceholder.hidden = false;
     }
+  });
+
+  const renderAssignVolunteerSkills = (volunteerId) => {
+    if (!assignVolunteerSkillsPanel || !assignVolunteerSkillsHint || !assignVolunteerSkillsList) {
+      return;
+    }
+
+    const selectedVolunteerId = String(volunteerId || "").trim();
+    const volunteerMeta = inviteVolunteerMetaById.get(selectedVolunteerId);
+    assignVolunteerSkillsList.innerHTML = "";
+
+    if (!volunteerMeta) {
+      assignVolunteerSkillsPanel.hidden = true;
+      assignVolunteerSkillsHint.textContent = "";
+      return;
+    }
+
+    assignVolunteerSkillsPanel.hidden = false;
+    const totalRequired = inviteRequiredSkills.length;
+    const matchingSkills = volunteerMeta.matchingSkills || [];
+    if (totalRequired === 0) {
+      assignVolunteerSkillsHint.textContent =
+        `${volunteerMeta.displayName} skills. Campaign has no required skills, so all are eligible.`;
+    } else {
+      assignVolunteerSkillsHint.textContent = `${volunteerMeta.displayName} matches ${matchingSkills.length} of ${totalRequired} required skills. Matching skills are highlighted.`;
+    }
+
+    if (!Array.isArray(volunteerMeta.skills) || volunteerMeta.skills.length === 0) {
+      const emptyState = document.createElement("p");
+      emptyState.className = "assign-volunteer-skills-empty";
+      emptyState.textContent = "No skills listed on this volunteer profile.";
+      assignVolunteerSkillsList.append(emptyState);
+      return;
+    }
+
+    const matchingSkillSet = new Set(matchingSkills);
+    for (const skill of volunteerMeta.skills) {
+      const tag = document.createElement("span");
+      tag.className = "assign-volunteer-skill-tag";
+      tag.textContent = skill;
+      if (matchingSkillSet.has(skill)) {
+        tag.classList.add("is-match");
+      }
+      assignVolunteerSkillsList.append(tag);
+    }
+  };
+
+  assignVolunteerSelect?.addEventListener("change", () => {
+    renderAssignVolunteerSkills(assignVolunteerSelect.value);
   });
 
   const renderApplications = async () => {
@@ -605,11 +659,29 @@ export async function renderCampaignPage(mountNode, params = {}) {
       const eligibleVolunteers = (volunteerDirectory ?? []).filter((volunteer) =>
         hasAtLeastOneMatchingSkill(volunteer.volunteer_skills || [], requiredSkills)
       );
+      inviteRequiredSkills = [...requiredSkills];
+      inviteVolunteerMetaById = new Map();
       assignVolunteerSelect.innerHTML = "";
       for (const volunteer of eligibleVolunteers) {
+        const volunteerSkills = normalizeSkillValues(volunteer.volunteer_skills || []);
+        const matchingSkills =
+          requiredSkills.length > 0 ? volunteerSkills.filter((skill) => requiredSkills.includes(skill)) : [];
+        const volunteerName = String(volunteer.display_name || "Volunteer");
+        inviteVolunteerMetaById.set(String(volunteer.id), {
+          displayName: volunteerName,
+          skills: volunteerSkills,
+          matchingSkills,
+        });
+
         const option = document.createElement("option");
         option.value = volunteer.id;
-        option.textContent = volunteer.display_name;
+        if (requiredSkills.length > 0) {
+          option.textContent = `${volunteerName} (${matchingSkills.length} match${matchingSkills.length === 1 ? "" : "es"})`;
+        } else if (volunteerSkills.length > 0) {
+          option.textContent = `${volunteerName} (${volunteerSkills.length} skills)`;
+        } else {
+          option.textContent = `${volunteerName} (No skills listed)`;
+        }
         assignVolunteerSelect.append(option);
       }
       if (eligibleVolunteers.length === 0) {
@@ -620,12 +692,23 @@ export async function renderCampaignPage(mountNode, params = {}) {
             ? "No volunteers match the required skills"
             : "No volunteers available";
         assignVolunteerSelect.append(option);
+        assignVolunteerSelect.disabled = true;
+        renderAssignVolunteerSkills("");
+      } else {
+        assignVolunteerSelect.disabled = false;
+        if (!assignVolunteerSelect.value) {
+          assignVolunteerSelect.value = String(eligibleVolunteers[0].id);
+        }
+        renderAssignVolunteerSkills(assignVolunteerSelect.value);
       }
 
       await renderApplications();
     } else if (campaignInlineEditor) {
       campaignInlineEditor.innerHTML = "";
       cancelActiveInlineEdit = null;
+      inviteRequiredSkills = [];
+      inviteVolunteerMetaById = new Map();
+      renderAssignVolunteerSkills("");
     }
 
     volunteerActions.hidden = !canVolunteerParticipate || campaignData.status !== "published";
