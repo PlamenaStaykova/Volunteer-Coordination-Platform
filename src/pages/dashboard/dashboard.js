@@ -4,6 +4,7 @@ import { renderHeader } from "../../components/header/header.js";
 import { renderFooter } from "../../components/footer/footer.js";
 import { requireAuth } from "../../lib/guards.js";
 import {
+  assignVolunteerToCampaign,
   getAdminDashboardOverview,
   adminCreateUser,
   deleteCampaignCoverImage,
@@ -22,6 +23,7 @@ import {
   getOrganizerCampaigns,
   getOrganizerCampaignSignupSummary,
   getUserType,
+  getVolunteerDirectory,
   getVolunteerParticipationCampaigns,
   joinCampaign,
   leaveCampaign,
@@ -493,6 +495,8 @@ export async function renderDashboardPage(mountNode) {
   let joinedCampaignIds = new Set();
   let volunteerCampaignIds = new Set();
   let organizerCampaigns = [];
+  let organizerVolunteerDirectory = [];
+  let organizerVolunteerDirectoryError = "";
   let adminOverview = { organizers: [], volunteers: [] };
   let adminUsers = [];
   let homeGalleryImages = [];
@@ -1215,6 +1219,20 @@ export async function renderDashboardPage(mountNode) {
       const appliedCount = Number(campaign.applied_count || 0);
       const invitedSummary = invitedCount > 0 ? `Yes (${invitedCount})` : "No";
       const appliedSummary = appliedCount > 0 ? `Yes (${appliedCount})` : "No";
+      const eligibleVolunteers = (organizerVolunteerDirectory ?? [])
+        .map((volunteer) => {
+          const volunteerSkills = normalizeVolunteerSkills(volunteer?.volunteer_skills || []);
+          const matchingSkills =
+            requiredSkills.length > 0 ? volunteerSkills.filter((skill) => requiredSkills.includes(skill)) : [];
+          return {
+            id: volunteer?.id,
+            displayName: String(volunteer?.display_name || "Volunteer"),
+            skills: volunteerSkills,
+            matchingSkills,
+          };
+        })
+        .filter((volunteer) => Boolean(volunteer.id))
+        .filter((volunteer) => requiredSkills.length === 0 || volunteer.matchingSkills.length > 0);
 
       item.innerHTML = `
         <div class="campaign-title-row">
@@ -1226,6 +1244,17 @@ export async function renderDashboardPage(mountNode) {
         <p><strong>Required Skills:</strong> ${requiredSkillsSummary}</p>
         <p><strong>Volunteers Invited:</strong> ${invitedSummary}</p>
         <p><strong>Volunteer Applications:</strong> ${appliedSummary}</p>
+        <form class="admin-form campaign-invite-form" data-action="invite-form">
+          <label>
+            Invite Volunteer
+            <select data-action="invite-volunteer-select" required></select>
+          </label>
+          <button type="submit" class="btn btn-small" data-action="invite-volunteer-submit">Send Invitation</button>
+          <div class="campaign-invite-skills" data-action="invite-skills-panel" hidden>
+            <p class="campaign-invite-skills-hint" data-action="invite-skills-hint"></p>
+            <div class="campaign-invite-skills-list" data-action="invite-skills-list"></div>
+          </div>
+        </form>
         <div class="campaign-avatar-tools">
           <p><strong>Campaign Avatar:</strong></p>
           <div class="campaign-avatar-preview-wrap">
@@ -1297,6 +1326,139 @@ export async function renderDashboardPage(mountNode) {
       const campaignAvatarInput = item.querySelector('[data-action="campaign-avatar-input"]');
       const uploadCoverButton = item.querySelector('[data-action="upload-cover"]');
       const deleteCoverButton = item.querySelector('[data-action="delete-cover"]');
+      const inviteVolunteerForm = item.querySelector('[data-action="invite-form"]');
+      const inviteVolunteerSelect = item.querySelector('[data-action="invite-volunteer-select"]');
+      const inviteVolunteerSubmit = item.querySelector('[data-action="invite-volunteer-submit"]');
+      const inviteSkillsPanel = item.querySelector('[data-action="invite-skills-panel"]');
+      const inviteSkillsHint = item.querySelector('[data-action="invite-skills-hint"]');
+      const inviteSkillsList = item.querySelector('[data-action="invite-skills-list"]');
+      const eligibleVolunteerById = new Map(eligibleVolunteers.map((volunteer) => [String(volunteer.id), volunteer]));
+
+      const renderInviteVolunteerSkills = () => {
+        if (!inviteSkillsPanel || !inviteSkillsHint || !inviteSkillsList || !inviteVolunteerSelect) {
+          return;
+        }
+
+        const selectedVolunteer = eligibleVolunteerById.get(String(inviteVolunteerSelect.value || ""));
+        inviteSkillsList.innerHTML = "";
+        if (!selectedVolunteer) {
+          inviteSkillsPanel.hidden = true;
+          inviteSkillsHint.textContent = "";
+          return;
+        }
+
+        inviteSkillsPanel.hidden = false;
+        if (requiredSkills.length === 0) {
+          inviteSkillsHint.textContent =
+            `${selectedVolunteer.displayName} skills. Campaign has no required skills, so all are eligible.`;
+        } else {
+          inviteSkillsHint.textContent = `${selectedVolunteer.displayName} matches ${selectedVolunteer.matchingSkills.length} of ${requiredSkills.length} required skills. Matching skills are highlighted.`;
+        }
+
+        if (selectedVolunteer.skills.length === 0) {
+          const emptyState = document.createElement("p");
+          emptyState.className = "campaign-invite-skills-empty";
+          emptyState.textContent = "No skills listed on this volunteer profile.";
+          inviteSkillsList.append(emptyState);
+          return;
+        }
+
+        const matchingSkillSet = new Set(selectedVolunteer.matchingSkills);
+        for (const skill of selectedVolunteer.skills) {
+          const tag = document.createElement("span");
+          tag.className = "campaign-invite-skill-tag";
+          tag.textContent = skill;
+          if (matchingSkillSet.has(skill)) {
+            tag.classList.add("is-match");
+          }
+          inviteSkillsList.append(tag);
+        }
+      };
+
+      if (inviteVolunteerSelect) {
+        inviteVolunteerSelect.innerHTML = "";
+        if (organizerVolunteerDirectoryError) {
+          const option = document.createElement("option");
+          option.value = "";
+          option.textContent = "Unable to load volunteers";
+          inviteVolunteerSelect.append(option);
+          inviteVolunteerSelect.disabled = true;
+          if (inviteVolunteerSubmit) {
+            inviteVolunteerSubmit.disabled = true;
+          }
+        } else if (eligibleVolunteers.length === 0) {
+          const option = document.createElement("option");
+          option.value = "";
+          option.textContent =
+            requiredSkills.length > 0
+              ? "No volunteers match current required skills"
+              : "No volunteers available";
+          inviteVolunteerSelect.append(option);
+          inviteVolunteerSelect.disabled = true;
+          if (inviteVolunteerSubmit) {
+            inviteVolunteerSubmit.disabled = true;
+          }
+        } else {
+          for (const volunteer of eligibleVolunteers) {
+            const option = document.createElement("option");
+            option.value = String(volunteer.id);
+            if (requiredSkills.length > 0) {
+              option.textContent = `${volunteer.displayName} (${volunteer.matchingSkills.length} match${
+                volunteer.matchingSkills.length === 1 ? "" : "es"
+              })`;
+            } else if (volunteer.skills.length > 0) {
+              option.textContent = `${volunteer.displayName} (${volunteer.skills.length} skills)`;
+            } else {
+              option.textContent = `${volunteer.displayName} (No skills listed)`;
+            }
+            inviteVolunteerSelect.append(option);
+          }
+          inviteVolunteerSelect.disabled = false;
+          if (inviteVolunteerSubmit) {
+            inviteVolunteerSubmit.disabled = false;
+          }
+        }
+      }
+
+      inviteVolunteerSelect?.addEventListener("change", () => {
+        renderInviteVolunteerSkills();
+      });
+      renderInviteVolunteerSkills();
+
+      inviteVolunteerForm?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const volunteerId = String(inviteVolunteerSelect?.value || "").trim();
+        if (!volunteerId) {
+          setInlineMessage(adminActionMessage, "Select an eligible volunteer first.");
+          return;
+        }
+
+        if (inviteVolunteerSelect) {
+          inviteVolunteerSelect.disabled = true;
+        }
+        if (inviteVolunteerSubmit) {
+          inviteVolunteerSubmit.disabled = true;
+        }
+
+        try {
+          const { error } = await assignVolunteerToCampaign(campaign.id, volunteerId);
+          if (error) {
+            setInlineMessage(adminActionMessage, error.message || "Unable to invite volunteer.");
+            return;
+          }
+
+          setInlineMessage(adminActionMessage, "Volunteer invited.", "success");
+          await loadOrganizerData();
+          await loadCampaignData();
+        } finally {
+          if (inviteVolunteerSelect && !organizerVolunteerDirectoryError) {
+            inviteVolunteerSelect.disabled = eligibleVolunteers.length === 0;
+          }
+          if (inviteVolunteerSubmit && !organizerVolunteerDirectoryError) {
+            inviteVolunteerSubmit.disabled = eligibleVolunteers.length === 0;
+          }
+        }
+      });
 
       editToggleButton.addEventListener("click", () => {
         inlineEditForm.hidden = !inlineEditForm.hidden;
@@ -1580,10 +1742,11 @@ export async function renderDashboardPage(mountNode) {
       return;
     }
 
-    const [campaignsResult, dashboardResult, signupSummaryResult] = await Promise.all([
+    const [campaignsResult, dashboardResult, signupSummaryResult, volunteerDirectoryResult] = await Promise.all([
       getOrganizerCampaigns({ includeAll: isAdmin }),
       getCampaignDashboardData(),
       getOrganizerCampaignSignupSummary({ includeAll: isAdmin }),
+      getVolunteerDirectory(),
     ]);
 
     if (campaignsResult.error) {
@@ -1607,6 +1770,14 @@ export async function renderDashboardPage(mountNode) {
         applied_count: signupSummaryByCampaignId.get(campaign.id)?.applied_count ?? 0,
       }));
       setInlineMessage(adminActionMessage, "");
+    }
+
+    if (volunteerDirectoryResult.error) {
+      organizerVolunteerDirectory = [];
+      organizerVolunteerDirectoryError = volunteerDirectoryResult.error.message || "Unable to load volunteers.";
+    } else {
+      organizerVolunteerDirectory = volunteerDirectoryResult.data ?? [];
+      organizerVolunteerDirectoryError = "";
     }
 
     updateFilterCounters();
