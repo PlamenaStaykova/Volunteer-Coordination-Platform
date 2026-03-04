@@ -59,12 +59,23 @@
 
 .public-campaign-search input {
   width: 100%;
-  max-width: 700px;
   padding: 0.6rem 0.7rem;
   border: 1px solid #c8d4e5;
   border-radius: 8px;
   font-size: 0.95rem;
   font-family: inherit;
+}
+
+.public-campaign-search-controls {
+  width: 100%;
+  max-width: 700px;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.public-campaign-search-controls .btn {
+  flex-shrink: 0;
 }
 
 .public-campaign-list {
@@ -186,6 +197,11 @@
 }
 
 @media (max-width: 700px) {
+  .public-campaign-search-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .public-campaign-list {
     grid-template-columns: 1fr;
   }

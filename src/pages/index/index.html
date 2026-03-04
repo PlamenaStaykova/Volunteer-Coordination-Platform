@@ -15,11 +15,14 @@
       </div>
       <div class="public-campaign-search">
         <label for="publicCampaignSearchInput">Search campaigns</label>
-        <input
-          id="publicCampaignSearchInput"
-          type="search"
-          placeholder="Search by title, organization, status, description..."
-        />
+        <div class="public-campaign-search-controls">
+          <input
+            id="publicCampaignSearchInput"
+            type="search"
+            placeholder="Search by title, organization, status, description..."
+          />
+          <button id="publicCampaignSearchButton" class="btn btn-neutral" type="button">Search</button>
+        </div>
       </div>
       <ul id="publicCampaignList" class="public-campaign-list"></ul>
       <p id="publicCampaignEmpty" class="public-campaign-empty" hidden>

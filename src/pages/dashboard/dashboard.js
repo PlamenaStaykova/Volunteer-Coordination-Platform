@@ -402,6 +402,7 @@ export async function renderDashboardPage(mountNode) {
 
   const dashboardTitle = mountNode.querySelector("#dashboardTitle");
   const dashboardSearchInput = mountNode.querySelector("#dashboardSearchInput");
+  const dashboardSearchButton = mountNode.querySelector("#dashboardSearchButton");
   const dashboardError = mountNode.querySelector("#dashboardError");
   const dashboardFiltersSection = mountNode.querySelector(".dashboard-filters");
   const campaignListSection = mountNode.querySelector(".campaign-list-section");
@@ -1628,8 +1629,8 @@ export async function renderDashboardPage(mountNode) {
     });
   });
 
-  dashboardSearchInput?.addEventListener("input", () => {
-    searchQuery = dashboardSearchInput.value || "";
+  const runDashboardSearch = () => {
+    searchQuery = dashboardSearchInput?.value || "";
     applyFilter();
     if (canManageCampaigns) {
       renderOrganizerCampaigns();
@@ -1638,6 +1639,21 @@ export async function renderDashboardPage(mountNode) {
       renderAdminUsers();
       renderAdminOversight();
     }
+  };
+
+  dashboardSearchInput?.addEventListener("input", () => {
+    runDashboardSearch();
+  });
+
+  dashboardSearchInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      runDashboardSearch();
+    }
+  });
+
+  dashboardSearchButton?.addEventListener("click", () => {
+    runDashboardSearch();
   });
 
   adminUserFilterTabs.forEach((tab) => {

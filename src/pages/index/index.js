@@ -57,6 +57,7 @@ export async function renderIndexPage(mountNode) {
   mountNode.append(pageContainer.firstElementChild);
 
   const publicCampaignSearchInput = mountNode.querySelector("#publicCampaignSearchInput");
+  const publicCampaignSearchButton = mountNode.querySelector("#publicCampaignSearchButton");
   const publicCampaignList = mountNode.querySelector("#publicCampaignList");
   const publicCampaignEmpty = mountNode.querySelector("#publicCampaignEmpty");
   const publicCampaignError = mountNode.querySelector("#publicCampaignError");
@@ -111,9 +112,24 @@ export async function renderIndexPage(mountNode) {
     }
   };
 
-  publicCampaignSearchInput?.addEventListener("input", () => {
-    searchQuery = publicCampaignSearchInput.value || "";
+  const runPublicSearch = () => {
+    searchQuery = publicCampaignSearchInput?.value || "";
     renderPublicCampaigns();
+  };
+
+  publicCampaignSearchInput?.addEventListener("input", () => {
+    runPublicSearch();
+  });
+
+  publicCampaignSearchInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      runPublicSearch();
+    }
+  });
+
+  publicCampaignSearchButton?.addEventListener("click", () => {
+    runPublicSearch();
   });
 
   const { data, error } = await getPublicCampaignOverview();
